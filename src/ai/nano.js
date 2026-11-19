@@ -1,13 +1,6 @@
-const MAX_SUMMARY_CHARS = 6000;
-const DIGEST_TIMEOUT_MS = 10000;
 
-function withTimeout(promise, ms, label = 'Operation') {
-    let timer;
-    const timeout = new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms);
-    });
-    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
+const MAX_SUMMARY_CHARS = 4500;
+const DIGEST_TIMEOUT_MS = 25000;
 
 export async function checkNanoStatus() {
     const hasSummarizer = 'Summarizer' in self;
@@ -21,14 +14,17 @@ export async function checkNanoStatus() {
         ? await self.Summarizer.availability({ outputLanguage: 'en' })
         : 'unavailable';
     const prompt = hasPrompt
-        ? await self.LanguageModel.availability({ outputLanguage: 'en' })
+        ? await self.LanguageModel.availability({
+            expectedOutputs: [{ type: 'text', languages: ['en'] }],
+        })
         : 'unavailable';
 
     return { summarizer, prompt };
 }
 
 /**
- * Generates a short 2-3 sentence digest with a 10-second fallback timeout.
+ * Generates a short 2-3 sentence digest when an article is saved.
+ * Falls back to a simple text snippet if Gemini Nano is unavailable.
  */
 export async function generateDigest(text, title = '', onProgress) {
     if (!text?.trim()) return '';
@@ -51,6 +47,7 @@ export async function generateDigest(text, title = '', onProgress) {
             monitor(m) {
                 m.addEventListener('downloadprogress', (e) => {
                     const pct = Math.round((e.loaded / (e.total || 1)) * 100);
+                    console.log(`Gemini Nano download: ${pct}%`);
                     onProgress?.(`Downloading Gemini Nano (${pct}%)...`);
                 });
             },
@@ -58,21 +55,21 @@ export async function generateDigest(text, title = '', onProgress) {
 
         onProgress?.('Summarizing locally...');
         const trimmed = text.slice(0, MAX_SUMMARY_CHARS);
-        const digest = await withTimeout(
-            summarizer.summarize(trimmed),
-            DIGEST_TIMEOUT_MS,
-            'Digest'
-        );
+        const digest = await summarizer.summarize(trimmed);
         return digest.trim();
     } catch (err) {
-        console.warn('Summarizer fallback triggered:', err.message);
+        console.warn('Summarizer API failed, using fallback snippet:', err);
         return fallbackSnippet;
     } finally {
         summarizer?.destroy();
     }
 }
 
-export function buildBriefingPrompt(articles) {
+/**
+ * Builds the map-reduce prompt using pre-computed digests so wide date windows
+ * (e.g., 30 days) fit comfortably inside Gemini Nano's local context window.
+ */
+export function buildBriefingPrompt(articles, archiveMatches = []) {
     const formatted = articles
         .map((a, idx) => {
             const body = a.digest || a.content?.slice(0, 400) || '(Link only - no extracted text)';
@@ -80,19 +77,40 @@ export function buildBriefingPrompt(articles) {
         })
         .join('\n\n');
 
-    return `Here are ${articles.length} articles saved during the selected period:\n\n${formatted}\n\nTask:
-1. Pick the top 3 most insightful articles.
+    let archiveSection = '';
+    let archiveInstruction = '';
+
+    if (archiveMatches.length > 0) {
+        const formattedArchive = archiveMatches
+            .map((a, idx) => {
+                const savedDate = new Date(a.savedAt).toLocaleDateString();
+                const body = a.digest || a.content?.slice(0, 300) || '(Link only)';
+                return `[A${idx + 1}] Title: ${a.title}\nURL: ${a.url}\nSaved On: ${savedDate}\nConnects To: "${a.matchedWith}"\nDigest: ${body}`;
+            })
+            .join('\n\n');
+
+        archiveSection = `\n\nForgotten Connections from Older Archive:\n${formattedArchive}`;
+        archiveInstruction = `\n5. Add a "## From Your Archive" section at the end highlighting how those older saved articles connect to this period's reading, citing each with its exact [Title](URL) link and saved date.`;
+    }
+
+    return `Here are ${articles.length} articles saved during the selected period:\n\n${formatted}${archiveSection}\n\nTask:
+1. Pick the top 3 most insightful articles from the selected period.
 2. Write a cohesive 2-minute text briefing summarizing their key takeaways.
 3. Cite each article inline using its exact Markdown link: [Title](URL).
-4. Add a brief "Emerging Themes" bullet list at the end if any articles connect.`;
+4. Add a brief "## Emerging Themes" bullet list if any recent articles connect.${archiveInstruction}`;
 }
 
-export async function generateBriefing(articles, onProgress) {
+/**
+ * Generates the on-demand briefing using Chrome's built-in Prompt API (Gemini Nano).
+ */
+export async function generateBriefing(articles, archiveMatches = [], onProgress) {
     if (!('LanguageModel' in self)) {
         throw new Error('Chrome Built-in Prompt API is not available in this browser.');
     }
 
-    const availability = await self.LanguageModel.availability({ outputLanguage: 'en' });
+    const availability = await self.LanguageModel.availability({
+        expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    });
     if (availability === 'unavailable') {
         throw new Error('Gemini Nano is unavailable on this device (requires desktop Chrome + 22 GB free disk).');
     }
@@ -100,7 +118,7 @@ export async function generateBriefing(articles, onProgress) {
     let session;
     try {
         session = await self.LanguageModel.create({
-            outputLanguage: 'en',
+            expectedOutputs: [{ type: 'text', languages: ['en'] }],
             initialPrompts: [
                 {
                     role: 'system',
@@ -116,7 +134,7 @@ export async function generateBriefing(articles, onProgress) {
             },
         });
 
-        const userPrompt = buildBriefingPrompt(articles);
+        const userPrompt = buildBriefingPrompt(articles, archiveMatches);
         const result = await session.prompt(userPrompt);
         return result.trim();
     } finally {

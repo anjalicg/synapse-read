@@ -7,6 +7,7 @@ import {
     generateBriefing,
     buildBriefingPrompt,
 } from '../ai/nano.js';
+import { generateEmbedding, findRelatedArticles } from '../ai/embeddings.js';
 
 const MAX_NOTE_WORDS = 1000;
 
@@ -119,6 +120,29 @@ export default function App() {
     const [isGenerating, setIsGenerating] = useState(false);
 
     const saveTimerRef = useRef(null);
+
+    const [relatedMap, setRelatedMap] = useState({});
+
+    async function ensureAllEmbeddings(allArticles) {
+        const missing = allArticles.filter(
+            (a) => !Array.isArray(a.embedding) && (a.digest || a.content)
+        );
+
+        for (let i = 0; i < missing.length; i++) {
+            const item = missing[i];
+            setStatusMsg(`Indexing archive (${i + 1}/${missing.length})...`);
+            const emb = await generateEmbedding(`${item.title}\n${item.digest || item.content}`);
+            if (emb) {
+                await db.articles.update(item.id, { embedding: emb });
+                item.embedding = emb;
+            }
+        }
+
+        if (missing.length > 0) {
+            await loadArticles();
+        }
+        return allArticles;
+    }
 
     async function loadArticles() {
         const all = await db.articles.orderBy('savedAt').reverse().toArray();
@@ -269,19 +293,22 @@ export default function App() {
                         if (digest) {
                             await db.articles.update(articleId, { digest });
                             await loadArticles();
-                            setStatusMsg('Digest ready!');
+                        }
+                        const embedInput = `${title}\n${digest || content}`;
+                        const embedding = await generateEmbedding(embedInput, setStatusMsg);
+                        if (embedding) {
+                            await db.articles.update(articleId, { embedding });
+                            await loadArticles();
+                            setStatusMsg('Digest & connections ready!');
                         }
                     })
-                    .catch((err) => {
-                        console.warn('Background digest error:', err);
-                    });
+                    .catch((err) => console.warn('Background AI error:', err));
             }
         } catch (err) {
             console.error(err);
             setStatusMsg('Error: ' + err.message);
         }
     }
-
     async function handleGenerateBriefing() {
         setIsGenerating(true);
         setStatusMsg('Querying articles...');
@@ -292,8 +319,22 @@ export default function App() {
                 return;
             }
 
-            setStatusMsg(`Synthesizing ${windowArticles.length} article(s) with Gemini Nano...`);
-            const summaryMarkdown = await generateBriefing(windowArticles, setStatusMsg);
+            const allArticles = await ensureAllEmbeddings(await db.articles.toArray());
+            const windowIds = new Set(windowArticles.map((a) => a.id));
+            const hydratedWindow = allArticles.filter((a) => windowIds.has(a.id));
+            const archiveMatches = findArchiveConnections(hydratedWindow, allArticles);
+
+            setStatusMsg(
+                archiveMatches.length > 0
+                    ? `Synthesizing ${hydratedWindow.length} article(s) + ${archiveMatches.length} archive match(es)...`
+                    : `Synthesizing ${hydratedWindow.length} article(s) with Gemini Nano...`
+            );
+
+            const summaryMarkdown = await generateBriefing(
+                hydratedWindow,
+                archiveMatches,
+                setStatusMsg
+            );
 
             let newId = null;
             if (db.briefings) {
@@ -301,14 +342,14 @@ export default function App() {
                     createdAt: Date.now(),
                     startDate,
                     endDate,
-                    articleUrls: windowArticles.map((a) => a.url),
+                    articleUrls: hydratedWindow.map((a) => a.url),
                     summaryMarkdown,
                     userNotes: '',
                 });
             }
 
             await Promise.all(
-                windowArticles.map((a) => db.articles.update(a.id, { status: 'summarized' }))
+                hydratedWindow.map((a) => db.articles.update(a.id, { status: 'summarized' }))
             );
 
             setBriefing(summaryMarkdown);
@@ -331,7 +372,9 @@ export default function App() {
             setStatusMsg('No articles in this date range to copy.');
             return;
         }
-        const prompt = buildBriefingPrompt(windowArticles);
+        const allArticles = await db.articles.toArray();
+        const archiveMatches = findArchiveConnections(windowArticles, allArticles);
+        const prompt = buildBriefingPrompt(windowArticles, archiveMatches);
         await navigator.clipboard.writeText(prompt);
         setStatusMsg('Prompt copied! Paste into ChatGPT, Claude, or Gemini.');
     }
@@ -339,6 +382,27 @@ export default function App() {
     async function deleteArticle(id) {
         await db.articles.delete(id);
         await loadArticles();
+    }
+    async function handleToggleRelated(item) {
+        if (relatedMap[item.id]) {
+            setRelatedMap((prev) => {
+                const next = { ...prev };
+                delete next[item.id];
+                return next;
+            });
+            return;
+        }
+
+        try {
+            const all = await ensureAllEmbeddings(await db.articles.toArray());
+            const target = all.find((a) => a.id === item.id) || item;
+            const matches = findRelatedArticles(target, all);
+            setRelatedMap((prev) => ({ ...prev, [target.id]: matches }));
+            setStatusMsg('');
+        } catch (err) {
+            console.error('Related articles indexing failed:', err);
+            setStatusMsg('Connection error: ' + err.message);
+        }
     }
 
     const nanoReady = nanoStatus.prompt !== 'unavailable';
@@ -539,16 +603,51 @@ export default function App() {
                             </p>
                         ) : null}
                         <div style={{ fontSize: '11px', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
-              <span>
-                {item.status} · {new Date(item.savedAt).toLocaleDateString()}
-              </span>
-                            <button
-                                onClick={() => deleteArticle(item.id)}
-                                style={{ border: 'none', background: 'none', color: '#c00', cursor: 'pointer', fontSize: '11px' }}
-                            >
-                                Remove
-                            </button>
+                            <span>
+                                {item.status} · {new Date(item.savedAt).toLocaleDateString()}
+                            </span>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    onClick={() => handleToggleRelated(item)}
+                                    style={{ border: 'none', background: 'none', color: '#0b57d0', cursor: 'pointer', fontSize: '11px' }}
+                                >
+                                    {relatedMap[item.id] ? 'Hide Related' : 'Related'}
+                                </button>
+                                <button
+                                    onClick={() => deleteArticle(item.id)}
+                                    style={{ border: 'none', background: 'none', color: '#c00', cursor: 'pointer', fontSize: '11px' }}
+                                >
+                                    Remove
+                                </button>
+                            </div>
                         </div>
+
+                        {relatedMap[item.id] && (
+                            <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px dashed #e0e0e0', fontSize: '11px' }}>
+                                {relatedMap[item.id].length === 0 ? (
+                                    <span style={{ color: '#888' }}>No strong connections found yet.</span>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <strong style={{ color: '#444' }}>Related Articles:</strong>
+                                        {relatedMap[item.id].map((rel) => (
+                                            <div key={rel.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '6px' }}>
+                                                <a
+                                                    href={rel.url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    style={{ color: '#0b57d0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                                >
+                                                    {rel.title}
+                                                </a>
+                                                <span style={{ color: '#666', flexShrink: 0 }}>
+                                                    {Math.round(rel.score * 100)}%
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
