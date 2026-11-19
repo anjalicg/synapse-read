@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Synapse-Read",
+  "version": "0.1.0",
+  "description": "Save articles locally, generate on-demand briefings with on-device AI, and explore connections.",
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "tabs",
+    "scripting",
+    "storage",
+    "readingList"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "action": {
+    "default_title": "Open Synapse-Read"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}
