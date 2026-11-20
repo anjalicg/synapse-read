@@ -1,11 +1,11 @@
 import React from 'react';
 
 const APP_ABOUT = {
-    name: 'Synapse-Read',
+    name: 'Afterword',
     version: '1.0.0',
     tagline: 'A private, local-first research assistant and reading synthesizer inside Chrome.',
     description:
-        'Synapse-Read captures articles locally, generates on-device digests and 384-dimension semantic embeddings, and synthesizes date-range briefings with cross-archive connections—without sending your reading history to any external server.',
+        'Afterword captures articles locally, generates on-device digests and 384-dimension semantic embeddings, and synthesizes date-range briefings with cross-archive connections—without sending your reading history to any external server.',
     author: 'Built by Anjali C.G.',
 };
 

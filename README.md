@@ -1,4 +1,4 @@
-# Synapse-Read
+# Afterword
 
 A local-first, privacy-focused Chrome Side Panel extension (Manifest V3) that captures web articles, attaches per-post annotations, maps semantic connections across 10,000+ saved reads, and synthesizes date-range briefings—with zero external servers, cloud tokens, or telemetry.
 
@@ -55,4 +55,4 @@ npm run build
 # 2. (Optional) Repackage pre-built zip for GitHub Pages (docs/synapse-read.zip)
 rm -rf /tmp/synapse-read docs/synapse-read.zip && \
 cp -R dist /tmp/synapse-read && \
-(cd /tmp && zip -r "$OLDPWD/docs/synapse-read.zip" synapse-read)
+(cd /tmp && zip -r "$OLDPWD/docs/synapse-read.zip" afterword)

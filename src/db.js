@@ -31,7 +31,7 @@ db.version(3)
 export async function ensurePersistentStorage() {
   if (navigator.storage && navigator.storage.persist) {
     const isPersisted = await navigator.storage.persist();
-    console.log(`Synapse-Read persistent storage: ${isPersisted}`);
+    console.log(`Afterword persistent storage: ${isPersisted}`);
   }
 }
 
@@ -108,7 +108,7 @@ export async function exportArchiveJSON() {
   const briefings = await db.briefings.toArray();
   return JSON.stringify(
     {
-      app: 'Synapse-Read',
+      app: 'Afterword',
       version: 3,
       exportedAt: new Date().toISOString(),
       articles,
@@ -122,7 +122,7 @@ export async function exportArchiveJSON() {
 export async function importArchiveJSON(jsonText) {
   const data = JSON.parse(jsonText);
   if (!data || !Array.isArray(data.articles)) {
-    throw new Error('Invalid Synapse-Read backup file.');
+    throw new Error('Invalid Afterword backup file.');
   }
 
   let addedArticles = 0;

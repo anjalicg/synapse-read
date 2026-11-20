@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Synapse-Read",
+  "name": "Afterword",
   "version": "0.1.0",
   "description": "Save articles locally, generate on-demand briefings with on-device AI, and explore connections.",
   "permissions": [
@@ -17,7 +17,7 @@
     "https://*/*"
   ],
   "action": {
-    "default_title": "Open Synapse-Read"
+    "default_title": "Open Afterword"
   },
   "side_panel": {
     "default_path": "sidepanel.html"
@@ -36,7 +36,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "Open Synapse-Read",
+    "default_title": "Open Afterword",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"

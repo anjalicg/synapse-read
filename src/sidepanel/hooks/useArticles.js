@@ -95,7 +95,7 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
 
     const existing = await db.articles.where('url').equals(tab.url).first();
     if (existing) {
-      setStatusMsg('Already saved in Synapse-Read.');
+      setStatusMsg('Already saved in Afterword.');
       return;
     }
 

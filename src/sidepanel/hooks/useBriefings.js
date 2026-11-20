@@ -258,7 +258,7 @@ export function useBriefings({
 
     const frontmatter = [
       '---',
-      `title: "Synapse-Read Briefing (${winStart} to ${winEnd})"`,
+      `title: "Afterword Briefing (${winStart} to ${winEnd})"`,
       `date_range: "${winStart} to ${winEnd}"`,
       `exported_at: "${new Date().toISOString()}"`,
       `articles_count: ${windowArticles.length}`,
@@ -300,7 +300,7 @@ export function useBriefings({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `synapse-read-briefing-${winStart}-to-${winEnd}.md`;
+    a.download = `afterword-briefing-${winStart}-to-${winEnd}.md`;
     a.click();
     URL.revokeObjectURL(url);
     setStatusMsg('Exported Markdown with post notes.');

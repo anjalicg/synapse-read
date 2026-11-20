@@ -37,7 +37,7 @@ export function Header({
                         <circle cx="64" cy="64" r="9" fill="#FFFDF9" />
                     </svg>
                     <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, letterSpacing: '-0.02em' }}>
-                        Synapse-Read
+                        Afterword
                     </h2>
                 </div>
 
@@ -68,7 +68,7 @@ export function Header({
                 </button>
                 <button
                     onClick={onToggleAbout}
-                    title="About Synapse-Read"
+                    title="About Afterword"
                     className={`sr-pill ${showAbout ? 'active' : ''}`}
                     style={{ marginLeft: 'auto' }}
                 >
