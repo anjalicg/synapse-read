@@ -12,11 +12,9 @@ const APP_ABOUT = {
 export function AboutPanel({ articleCount, briefingCount, nanoStatus, onClose }) {
     return (
         <div
+            className="sr-card"
             style={{
-                padding: '12px',
-                background: '#fff',
-                border: '1px solid #d0dceb',
-                borderRadius: '6px',
+                '--accent': 'var(--plum)',
                 fontSize: '12px',
                 lineHeight: 1.5,
                 display: 'flex',
@@ -24,25 +22,45 @@ export function AboutPanel({ articleCount, briefingCount, nanoStatus, onClose })
                 gap: '10px',
             }}
         >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '6px' }}>
+            <div
+                style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderBottom: '1px dashed var(--line)',
+                    paddingBottom: '6px',
+                }}
+            >
                 <div>
-                    <strong style={{ fontSize: '14px', color: '#111' }}>{APP_ABOUT.name}</strong>{' '}
-                    <span style={{ fontSize: '11px', color: '#666' }}>v{APP_ABOUT.version}</span>
+                    <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>{APP_ABOUT.name}</strong>{' '}
+                    <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>
+            v{APP_ABOUT.version}
+          </span>
                 </div>
-                <button
-                    onClick={onClose}
-                    style={{ border: '1px solid #ddd', background: '#f7f7f7', borderRadius: '4px', padding: '2px 8px', fontSize: '11px', cursor: 'pointer' }}
-                >
+                <button onClick={onClose} className="sr-pill">
                     Back
                 </button>
             </div>
 
-            <p style={{ margin: 0, fontWeight: 600, color: '#222' }}>{APP_ABOUT.tagline}</p>
-            <p style={{ margin: 0, color: '#444' }}>{APP_ABOUT.description}</p>
+            <p style={{ margin: 0, fontWeight: 700, color: 'var(--ink)' }}>{APP_ABOUT.tagline}</p>
+            <p style={{ margin: 0, color: 'var(--ink-muted)' }}>{APP_ABOUT.description}</p>
 
             {/* Local Storage & Runtime Diagnostics */}
-            <div style={{ padding: '8px', background: '#f7f9fc', borderRadius: '4px', fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <strong style={{ color: '#111' }}>Local Archive & Engine Status</strong>
+            <div
+                style={{
+                    padding: '8px 10px',
+                    background: 'var(--paper)',
+                    border: '1px solid var(--line)',
+                    borderRadius: '8px',
+                    fontSize: '11px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                }}
+            >
+        <span className="sr-node-tag" style={{ '--accent': 'var(--sage)' }}>
+          <i className="sr-node-dot" /> local archive &amp; engine
+        </span>
                 <div>
                     • <strong>Storage:</strong> {articleCount} article(s), {briefingCount} briefing(s) in IndexedDB
                 </div>
@@ -58,14 +76,26 @@ export function AboutPanel({ articleCount, briefingCount, nanoStatus, onClose })
             </div>
 
             {/* Setup Reference */}
-            <div style={{ fontSize: '11px', color: '#555', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <strong style={{ color: '#222' }}>Chrome On-Device AI Flags</strong>
+            <div style={{ fontSize: '11px', color: 'var(--ink-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span className="sr-node-tag" style={{ '--accent': 'var(--ochre)' }}>
+          <i className="sr-node-dot" /> chrome on-device ai flags
+        </span>
                 <div>• <code>chrome://flags/#optimization-guide-on-device-model</code></div>
                 <div>• <code>chrome://flags/#prompt-api-for-gemini-nano</code></div>
                 <div>• <code>chrome://flags/#summarization-api-for-gemini-nano</code></div>
             </div>
 
-            <div style={{ borderTop: '1px solid #eee', paddingTop: '6px', fontSize: '11px', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
+            <div
+                style={{
+                    borderTop: '1px dashed var(--line)',
+                    paddingTop: '6px',
+                    fontFamily: 'monospace',
+                    fontSize: '10.5px',
+                    color: 'var(--ink-muted)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                }}
+            >
                 <span>{APP_ABOUT.author}</span>
                 <span>100% Local · Zero Telemetry</span>
             </div>

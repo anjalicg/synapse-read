@@ -17,13 +17,23 @@ export function SearchSection({ search, onOpenBriefing }) {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => updateQuery(e.target.value)}
-                    placeholder="Semantic search across articles & notes..."
-                    style={{ flex: 1, padding: '6px 8px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px' }}
+                    placeholder="Semantic search articles & notes..."
+                    className="sr-input"
+                    style={{
+                        flex: 1,
+                        padding: '6px 9px',
+                        background: 'var(--card)',
+                    }}
                 />
                 <button
                     type="submit"
                     disabled={isSearching}
-                    style={{ padding: '6px 10px', fontSize: '12px', cursor: 'pointer' }}
+                    className="sr-btn"
+                    style={{
+                        background: 'var(--sage)',
+                        color: '#FFFDF9',
+                        padding: '6px 11px',
+                    }}
                 >
                     {isSearching ? '...' : 'Search'}
                 </button>
@@ -31,7 +41,8 @@ export function SearchSection({ search, onOpenBriefing }) {
                     <button
                         type="button"
                         onClick={clearSearch}
-                        style={{ padding: '6px 8px', fontSize: '11px', cursor: 'pointer' }}
+                        className="sr-btn sr-btn-secondary"
+                        style={{ padding: '6px 8px', fontSize: '11px' }}
                     >
                         Clear
                     </button>
@@ -40,20 +51,19 @@ export function SearchSection({ search, onOpenBriefing }) {
 
             {matchingBriefings.length > 0 && (
                 <div
+                    className="sr-card"
                     style={{
-                        padding: '10px',
-                        background: '#fffbeb',
-                        border: '1px solid #fde68a',
-                        borderRadius: '6px',
+                        '--accent': 'var(--ochre)',
+                        background: '#FDF7E7',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '6px',
                         fontSize: '11px',
                     }}
                 >
-                    <strong style={{ color: '#92400e' }}>
-                        Matching Briefing Notes ({matchingBriefings.length})
-                    </strong>
+          <span className="sr-node-tag">
+            <i className="sr-node-dot" /> matching notes ({matchingBriefings.length})
+          </span>
                     {matchingBriefings.map((mb) => {
                         const snippet = (mb.userNotes?.trim() || mb.summaryMarkdown || '').slice(0, 140);
                         return (
@@ -64,17 +74,20 @@ export function SearchSection({ search, onOpenBriefing }) {
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
                                     gap: '8px',
-                                    paddingTop: '4px',
-                                    borderTop: '1px dashed #fcd34d',
+                                    paddingTop: '6px',
+                                    borderTop: '1px dashed var(--line)',
                                 }}
                             >
                                 <div style={{ overflow: 'hidden' }}>
-                                    <div style={{ fontWeight: 600, color: '#111' }}>
-                                        {mb.startDate} → {mb.endDate} ({Math.round(mb.searchScore * 100)}%)
+                                    <div style={{ fontWeight: 700, color: 'var(--ink)' }}>
+                                        {mb.startDate} → {mb.endDate}{' '}
+                                        <span style={{ color: 'var(--sage)', fontFamily: 'monospace' }}>
+                      ({Math.round(mb.searchScore * 100)}%)
+                    </span>
                                     </div>
                                     <div
                                         style={{
-                                            color: '#555',
+                                            color: 'var(--ink-muted)',
                                             whiteSpace: 'nowrap',
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
@@ -85,7 +98,8 @@ export function SearchSection({ search, onOpenBriefing }) {
                                 </div>
                                 <button
                                     onClick={() => onOpenBriefing(mb)}
-                                    style={{ padding: '3px 7px', fontSize: '11px', cursor: 'pointer', flexShrink: 0 }}
+                                    className="sr-pill"
+                                    style={{ flexShrink: 0 }}
                                 >
                                     Open
                                 </button>

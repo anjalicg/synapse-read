@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import './theme.css';
 import {
     ensurePersistentStorage,
     exportArchiveJSON,
@@ -101,7 +102,7 @@ export default function App() {
     const nanoReady = nanoStatus.prompt !== 'unavailable';
 
     return (
-        <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="sr-shell">
             <Header
                 nanoReady={nanoReady}
                 showAbout={showAbout}
@@ -113,24 +114,29 @@ export default function App() {
 
             {!showAbout && nanoStatus.prompt === 'downloadable' && (
                 <div
+                    className="sr-card"
                     style={{
-                        padding: '8px 10px',
-                        background: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: '6px',
-                        fontSize: '11px',
+                        '--accent': 'var(--ochre)',
+                        background: '#FDF7E7',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         gap: '8px',
+                        fontSize: '11.5px',
                     }}
                 >
-          <span style={{ color: '#1e3a8a' }}>
-            First-time setup: download Gemini Nano once so briefings run fast offline.
-          </span>
+                    <div>
+                        <div className="sr-node-tag" style={{ marginBottom: '2px' }}>
+                            <i className="sr-node-dot" /> setup:warmup
+                        </div>
+                        <div style={{ color: 'var(--ink)' }}>
+                            Download Gemini Nano once so briefings run fast offline.
+                        </div>
+                    </div>
                     <button
                         onClick={handleWarmupNano}
-                        style={{ padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}
+                        className="sr-btn"
+                        style={{ background: 'var(--ochre)', color: '#FFFDF9', flexShrink: 0, fontSize: '11px', padding: '5px 9px' }}
                     >
                         Download AI
                     </button>
@@ -146,17 +152,19 @@ export default function App() {
                 />
             ) : (
                 <>
-                    {/* Capture Controls */}
+                    {/* Capture Node */}
                     <div style={{ display: 'flex', gap: '8px' }}>
                         <button
                             onClick={() => articlesHook.saveActiveTab('content')}
-                            style={{ flex: 1, padding: '8px', cursor: 'pointer', fontWeight: 600 }}
+                            className="sr-btn sr-btn-primary"
+                            style={{ flex: 1 }}
                         >
-                            Save Content
+                            + Save Content
                         </button>
                         <button
                             onClick={() => articlesHook.saveActiveTab('bookmark')}
-                            style={{ flex: 1, padding: '8px', cursor: 'pointer' }}
+                            className="sr-btn sr-btn-secondary"
+                            style={{ flex: 1 }}
                         >
                             Save Link Only
                         </button>
@@ -174,7 +182,7 @@ export default function App() {
                         onOpenBriefing={briefingsHook.openBriefing}
                     />
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {search.visibleArticles.map((item) => (
                             <ArticleCard
                                 key={item.id}

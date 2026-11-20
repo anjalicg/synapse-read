@@ -14,7 +14,12 @@ function renderInlineMarkdown(text) {
                     href={linkMatch[2]}
                     target="_blank"
                     rel="noreferrer"
-                    style={{ color: '#0b57d0', textDecoration: 'underline' }}
+                    style={{
+                        color: 'var(--periwinkle)',
+                        fontWeight: 600,
+                        textDecoration: 'underline',
+                        textUnderlineOffset: '2px',
+                    }}
                 >
                     {linkMatch[1]}
                 </a>
@@ -41,7 +46,7 @@ function BriefingMarkdown({ content }) {
 
                 if (line.startsWith('### ')) {
                     return (
-                        <h4 key={idx} style={{ margin: '6px 0 2px', fontSize: '13px', color: '#111' }}>
+                        <h4 key={idx} style={{ margin: '6px 0 2px', fontSize: '13px', color: 'var(--ink)' }}>
                             {renderInlineMarkdown(line.slice(4))}
                         </h4>
                     );
@@ -49,7 +54,7 @@ function BriefingMarkdown({ content }) {
 
                 if (line.startsWith('## ')) {
                     return (
-                        <h3 key={idx} style={{ margin: '4px 0 2px', fontSize: '14px', color: '#111' }}>
+                        <h3 key={idx} style={{ margin: '4px 0 2px', fontSize: '14px', color: 'var(--ink)' }}>
                             {renderInlineMarkdown(line.slice(3))}
                         </h3>
                     );
@@ -98,32 +103,53 @@ export function BriefingPanel({ nanoReady, statusMsg, briefingsHook, speech }) {
 
     return (
         <>
-            {/* Date Range & Briefing Controls */}
-            <div style={{ padding: '10px', background: '#fff', border: '1px solid #e5e5e5', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Date Window & Synthesis Node */}
+            <div
+                className="sr-card"
+                style={{
+                    '--accent': 'var(--periwinkle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                }}
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="sr-node-tag">
+            <i className="sr-node-dot" /> node:synthesize
+          </span>
+                    <span style={{ fontFamily: 'monospace', fontSize: '10px', color: 'var(--ink-muted)' }}>
+            window
+          </span>
+                </div>
+
                 <div style={{ display: 'flex', gap: '6px' }}>
                     {[
                         ['7D', 7],
                         ['14D', 14],
                         ['30D', 30],
-                    ].map(([label, days]) => (
-                        <button
-                            key={label}
-                            onClick={() => applyPreset(label, days)}
-                            style={{
-                                flex: 1,
-                                padding: '4px',
-                                fontSize: '12px',
-                                cursor: 'pointer',
-                                fontWeight: preset === label ? 700 : 400,
-                                background: preset === label ? '#111' : '#f3f3f3',
-                                color: preset === label ? '#fff' : '#111',
-                                border: 'none',
-                                borderRadius: '4px',
-                            }}
-                        >
-                            {label}
-                        </button>
-                    ))}
+                    ].map(([label, days]) => {
+                        const isSelected = preset === label;
+                        return (
+                            <button
+                                key={label}
+                                onClick={() => applyPreset(label, days)}
+                                style={{
+                                    flex: 1,
+                                    padding: '4px',
+                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                    fontSize: '11.5px',
+                                    cursor: 'pointer',
+                                    fontWeight: 700,
+                                    background: isSelected ? 'var(--ink)' : 'var(--paper)',
+                                    color: isSelected ? 'var(--card)' : 'var(--ink)',
+                                    border: '1.25px solid var(--ink)',
+                                    borderRadius: '6px',
+                                }}
+                            >
+                                {label}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '11px' }}>
@@ -131,14 +157,16 @@ export function BriefingPanel({ nanoReady, statusMsg, briefingsHook, speech }) {
                         type="date"
                         value={startDate}
                         onChange={(e) => updateCustomDate('start', e.target.value)}
-                        style={{ flex: 1, fontSize: '11px' }}
+                        className="sr-input"
+                        style={{ flex: 1, minWidth: 0, fontSize: '11px', padding: '3px 5px' }}
                     />
-                    <span>to</span>
+                    <span style={{ fontFamily: 'monospace', color: 'var(--ink-muted)' }}>&rarr;</span>
                     <input
                         type="date"
                         value={endDate}
                         onChange={(e) => updateCustomDate('end', e.target.value)}
-                        style={{ flex: 1, fontSize: '11px' }}
+                        className="sr-input"
+                        style={{ flex: 1, minWidth: 0, fontSize: '11px', padding: '3px 5px' }}
                     />
                 </div>
 
@@ -146,33 +174,47 @@ export function BriefingPanel({ nanoReady, statusMsg, briefingsHook, speech }) {
                     <button
                         onClick={generateNewBriefing}
                         disabled={isGenerating || !nanoReady}
-                        style={{ flex: 2, padding: '8px', cursor: nanoReady ? 'pointer' : 'not-allowed', fontWeight: 600 }}
+                        className="sr-btn"
+                        style={{
+                            flex: 2,
+                            background: 'var(--periwinkle)',
+                            color: '#FFFDF9',
+                        }}
                     >
-                        {isGenerating ? 'Generating...' : 'Generate Briefing'}
+                        {isGenerating ? 'Synthesizing...' : 'Generate Briefing'}
                     </button>
                     <button
                         onClick={copyPromptFallback}
                         title="Copy prompt for ChatGPT / Claude / Gemini"
-                        style={{ flex: 1, padding: '8px', cursor: 'pointer', fontSize: '11px' }}
+                        className="sr-btn sr-btn-secondary"
+                        style={{ flex: 1, fontSize: '11px' }}
                     >
                         Copy Prompt
                     </button>
                 </div>
             </div>
 
-            {statusMsg && <div style={{ fontSize: '12px', color: '#444' }}>{statusMsg}</div>}
+            {statusMsg && <div className="sr-status-banner">{statusMsg}</div>}
 
             {/* Past Briefings Selector */}
             {briefings.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
-                    <label htmlFor="briefing-select" style={{ color: '#555', fontWeight: 600 }}>
-                        Briefing:
+                    <label
+                        htmlFor="briefing-select"
+                        style={{
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                            color: 'var(--ink-muted)',
+                            fontWeight: 700,
+                        }}
+                    >
+                        briefing:
                     </label>
                     <select
                         id="briefing-select"
                         value={activeBriefingId || ''}
                         onChange={(e) => selectBriefingById(e.target.value)}
-                        style={{ flex: 1, fontSize: '11px', padding: '4px' }}
+                        className="sr-select"
+                        style={{ flex: 1, fontSize: '11px', padding: '4px 6px' }}
                     >
                         {briefings.map((b) => (
                             <option key={b.id} value={b.id}>
@@ -186,35 +228,44 @@ export function BriefingPanel({ nanoReady, statusMsg, briefingsHook, speech }) {
             {/* Formatted Briefing Output + Audio + Export + User Notes */}
             {briefing && (
                 <div
+                    className="sr-card"
                     style={{
-                        padding: '12px',
-                        background: '#f7f9fc',
-                        border: '1px solid #d0dceb',
-                        borderRadius: '6px',
+                        '--accent': 'var(--plum)',
                         fontSize: '12px',
-                        lineHeight: 1.5,
+                        lineHeight: 1.55,
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '10px',
                     }}
                 >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #d0dceb', paddingBottom: '8px', gap: '6px' }}>
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Audio & Export Action Bar */}
+                    <div
+                        style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            borderBottom: '1px dashed var(--line)',
+                            paddingBottom: '8px',
+                            gap: '6px',
+                        }}
+                    >
+                        <div style={{ display: 'flex', gap: '5px', alignItems: 'center', flexWrap: 'wrap' }}>
                             <button
                                 onClick={() => speech.playPause(briefing)}
-                                style={{ padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}
+                                className="sr-pill"
+                                style={{
+                                    background: speech.speechState === 'playing' ? 'var(--sage)' : 'var(--paper)',
+                                    color: speech.speechState === 'playing' ? '#FFFDF9' : 'var(--ink)',
+                                }}
                             >
                                 {speech.speechState === 'playing'
-                                    ? 'Pause Audio'
+                                    ? 'Pause'
                                     : speech.speechState === 'paused'
                                         ? 'Resume'
                                         : 'Listen'}
                             </button>
                             {speech.speechState !== 'idle' && (
-                                <button
-                                    onClick={speech.stop}
-                                    style={{ padding: '4px 8px', fontSize: '11px', cursor: 'pointer' }}
-                                >
+                                <button onClick={speech.stop} className="sr-pill">
                                     Stop
                                 </button>
                             )}
@@ -222,7 +273,8 @@ export function BriefingPanel({ nanoReady, statusMsg, briefingsHook, speech }) {
                                 <select
                                     value={speech.selectedVoiceURI}
                                     onChange={(e) => speech.changeVoice(e.target.value)}
-                                    style={{ maxWidth: '130px', fontSize: '11px', padding: '3px' }}
+                                    className="sr-select"
+                                    style={{ maxWidth: '120px', fontSize: '10.5px', padding: '2px 4px' }}
                                 >
                                     {speech.voices.map((v) => (
                                         <option key={v.voiceURI} value={v.voiceURI}>
@@ -234,7 +286,8 @@ export function BriefingPanel({ nanoReady, statusMsg, briefingsHook, speech }) {
                         </div>
                         <button
                             onClick={exportMarkdown}
-                            style={{ padding: '4px 8px', fontSize: '11px', cursor: 'pointer', flexShrink: 0 }}
+                            className="sr-pill"
+                            style={{ flexShrink: 0 }}
                         >
                             Export .md
                         </button>
@@ -243,11 +296,27 @@ export function BriefingPanel({ nanoReady, statusMsg, briefingsHook, speech }) {
                     <BriefingMarkdown content={briefing} />
 
                     {activeBriefingId && (
-                        <div style={{ borderTop: '1px solid #d0dceb', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
-                                <strong style={{ color: '#222' }}>My Notes & Reflections</strong>
-                                <span style={{ color: noteWordCount >= MAX_NOTE_WORDS ? '#c00' : '#666' }}>
-                  {noteWordCount} / {MAX_NOTE_WORDS} words {notesStatus ? `· ${notesStatus}` : ''}
+                        <div
+                            style={{
+                                borderTop: '1px dashed var(--line)',
+                                paddingTop: '10px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '6px',
+                            }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="sr-node-tag">
+                  <i className="sr-node-dot" /> node:reflections
+                </span>
+                                <span
+                                    style={{
+                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                        fontSize: '10px',
+                                        color: noteWordCount >= MAX_NOTE_WORDS ? 'var(--terracotta)' : 'var(--ink-muted)',
+                                    }}
+                                >
+                  {noteWordCount}/{MAX_NOTE_WORDS}w {notesStatus ? `· ${notesStatus}` : ''}
                 </span>
                             </div>
                             <textarea
@@ -255,18 +324,13 @@ export function BriefingPanel({ nanoReady, statusMsg, briefingsHook, speech }) {
                                 onChange={(e) => handleNotesChange(e.target.value)}
                                 onBlur={flushNotes}
                                 placeholder="Add your thoughts, takeaways, or follow-up questions (up to 1,000 words)..."
-                                rows={5}
+                                rows={4}
+                                className="sr-textarea"
                                 style={{
                                     width: '100%',
-                                    boxSizing: 'border-box',
                                     padding: '8px',
-                                    fontSize: '12px',
-                                    fontFamily: 'inherit',
-                                    lineHeight: 1.4,
-                                    border: '1px solid #ccd6e4',
-                                    borderRadius: '4px',
+                                    lineHeight: 1.45,
                                     resize: 'vertical',
-                                    background: '#fff',
                                 }}
                             />
                         </div>
