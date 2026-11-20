@@ -21,6 +21,7 @@ export default function App() {
   const [statusMsg, setStatusMsg] = useState('');
   const [nanoStatus, setNanoStatus] = useState({ summarizer: 'checking', prompt: 'checking' });
   const [showAbout, setShowAbout] = useState(false);
+  const [isBriefingMinimized, setIsBriefingMinimized] = useState(false);
   const isGeneratingRef = useRef(false);
 
   function setBackgroundStatus(msg) {
@@ -174,11 +175,16 @@ export default function App() {
             statusMsg={statusMsg}
             briefingsHook={briefingsHook}
             speech={speech}
+            isMinimized={isBriefingMinimized}
+            onToggleMinimize={() => setIsBriefingMinimized((prev) => !prev)}
           />
 
           <SearchSection
             search={search}
-            onOpenBriefing={briefingsHook.openBriefing}
+            onOpenBriefing={(target) => {
+              setIsBriefingMinimized(false);
+              briefingsHook.openBriefing(target);
+            }}
           />
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
