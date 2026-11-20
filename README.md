@@ -52,7 +52,7 @@ A local-first, privacy-focused Chrome Side Panel extension (Manifest V3) that ca
 npm install
 npm run build
 
-# 2. (Optional) Repackage pre-built zip for GitHub Pages (docs/synapse-read.zip)
-rm -rf /tmp/synapse-read docs/synapse-read.zip && \
-cp -R dist /tmp/synapse-read && \
-(cd /tmp && zip -r "$OLDPWD/docs/synapse-read.zip" afterword)
+# 2. (Optional) Repackage pre-built zip for GitHub Pages (docs/afterword.zip)
+rm -rf /tmp/afterword docs/afterword.zip && \
+cp -R dist /tmp/afterword && \
+(cd /tmp && zip -r "$OLDPWD/docs/afterword.zip" afterword)
