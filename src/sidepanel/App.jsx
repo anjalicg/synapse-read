@@ -47,7 +47,7 @@ export default function App() {
     isGeneratingRef,
     ensureAllEmbeddings: articlesHook.ensureAllEmbeddings,
     loadArticles: articlesHook.loadArticles,
-    onBeforeBriefingChange: speech.stop,
+    onBeforeBriefingChange: () => { speech.stop(); setIsBriefingMinimized(false); },
   });
 
   const search = useSemanticSearch({

@@ -129,67 +129,7 @@ export function BriefingPanel({ nanoReady, statusMsg, briefingsHook, speech, isM
                         ['30D', 30],
                     ].map(([label, days]) => {
                         const isSelected = preset === label;
-                          if (isMinimized) {
-    return (
-      <div
-        className="sr-card"
-        style={{
-          '--accent': 'var(--periwinkle)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '6px',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-            <span className="sr-node-tag" style={{ flexShrink: 0 }}>
-              <i className="sr-node-dot" /> briefing
-            </span>
-            <span
-              style={{
-                fontFamily: 'monospace',
-                fontSize: '10.5px',
-                color: 'var(--ink-muted)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {briefingsHook.briefing
-                ? `${briefingsHook.startDate} → ${briefingsHook.endDate}`
-                : 'collapsed'}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onToggleMinimize}
-            className="sr-pill"
-            style={{ flexShrink: 0 }}
-          >
-            Expand
-          </button>
-        </div>
-        {statusMsg && (
-          <div
-            style={{
-              fontSize: '11px',
-              color: 'var(--sage)',
-              fontFamily: 'monospace',
-            }}
-          >
-            {statusMsg}
-          </div>
-        )}
-      </div>
-    );
-  }
+                          
 
 return (
                             <button
@@ -301,18 +241,36 @@ return (
                     }}
                 >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
-        <span className="sr-node-tag">
-          <i className="sr-node-dot" /> briefing window
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          <span className="sr-node-tag" style={{ flexShrink: 0 }}>
+            <i className="sr-node-dot" /> briefing window
+          </span>
+          {isMinimized && (
+            <span
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '10.5px',
+                color: 'var(--ink-muted)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {briefingsHook.startDate} → {briefingsHook.endDate}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={onToggleMinimize}
           className="sr-pill"
-          title="Minimize briefing to view saved articles"
+          style={{ flexShrink: 0 }}
+          title={isMinimized ? 'Expand briefing window' : 'Minimize briefing to view saved articles'}
         >
-          Minimize
+          {isMinimized ? 'Expand' : 'Minimize'}
         </button>
       </div>
+      {!isMinimized && (<>
                     {/* Audio & Export Action Bar */}
                     <div
                         style={{
@@ -410,7 +368,8 @@ return (
                             />
                         </div>
                     )}
-                </div>
+                </>)}
+    </div>
             )}
         </>
     );
