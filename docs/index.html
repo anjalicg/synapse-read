@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Synapse-Read — Install & User Workflow</title>
+    <style>
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #1e293b;
+            color: var(--cyan);
+            border: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 13px;
+            padding: 7px 14px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin-top: 10px;
+        }
+        .btn-secondary:hover { border-color: var(--cyan); }
+        :root {
+            --bg: #0b1120;
+            --surface: #131c31;
+            --border: #26344e;
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --cyan: #38bdf8;
+            --teal: #2dd4bf;
+            --green: #4ade80;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 32px 20px 64px;
+        }
+        .container {
+            max-width: 780px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 28px;
+            letter-spacing: -0.02em;
+        }
+        .tagline {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 15px;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .card h2 {
+            margin: 0 0 12px;
+            font-size: 17px;
+            color: var(--cyan);
+        }
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, var(--cyan), var(--teal));
+            color: #0b1120;
+            font-weight: 700;
+            font-size: 15px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-primary:hover { opacity: 0.92; }
+        .btn-copy {
+            background: #1e293b;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        .btn-copy:hover { border-color: var(--cyan); }
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 0;
+            padding-left: 20px;
+        }
+        .steps li { padding-left: 4px; }
+        code {
+            background: #0b1120;
+            border: 1px solid var(--border);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: var(--teal);
+        }
+        .ui-pill {
+            display: inline-block;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            padding: 1px 7px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .drop-guide {
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .drop-guide.dragover {
+            border-color: var(--cyan);
+            background: rgba(56, 189, 248, 0.08);
+            color: var(--text);
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .status-pill {
+            background: #0b1120;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 13px;
+        }
+        .status-pill strong { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+        .ok { color: var(--green); }
+        .warn { color: #fbbf24; }
+        .flag-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            border-top: 1px solid var(--border);
+            font-size: 13px;
+            flex-wrap: wrap;
+        }
+        .workflow-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        .wf-step {
+            background: #0b1120;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+        }
+        .wf-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        .wf-badge {
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--cyan);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 999px;
+            text-transform: uppercase;
+        }
+        .wf-title {
+            font-weight: 700;
+            font-size: 15px;
+            color: var(--text);
+        }
+        .wf-body {
+            margin: 0;
+            font-size: 13.5px;
+            color: var(--muted);
+        }
+        .wf-body ul {
+            margin: 6px 0 0;
+            padding-left: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <svg viewBox="0 0 128 128" width="56" height="56" aria-hidden="true">
+            <rect x="4" y="4" width="120" height="120" rx="28" fill="#131c31" stroke="#334155" stroke-width="2" />
+            <g stroke="#38bdf8" stroke-width="1.8" stroke-opacity="0.35" stroke-linecap="round">
+                <line x1="44" y1="24" x2="68" y2="20" /><line x1="68" y1="20" x2="90" y2="30" />
+                <line x1="44" y1="24" x2="24" y2="44" /><line x1="68" y1="20" x2="50" y2="44" />
+                <line x1="68" y1="20" x2="78" y2="42" /><line x1="90" y1="30" x2="104" y2="50" />
+                <line x1="24" y1="44" x2="24" y2="88" /><line x1="104" y1="50" x2="102" y2="88" />
+                <line x1="50" y1="44" x2="78" y2="42" /><line x1="50" y1="44" x2="90" y2="68" />
+                <line x1="78" y1="42" x2="38" y2="66" /><line x1="52" y1="88" x2="78" y2="90" />
+            </g>
+            <g stroke="#2dd4bf" stroke-width="3.6" stroke-linecap="round">
+                <line x1="44" y1="24" x2="50" y2="44" /><line x1="90" y1="30" x2="78" y2="42" />
+                <line x1="24" y1="44" x2="50" y2="44" /><line x1="24" y1="44" x2="38" y2="66" />
+                <line x1="104" y1="50" x2="78" y2="42" /><line x1="104" y1="50" x2="90" y2="68" />
+                <line x1="50" y1="44" x2="64" y2="64" /><line x1="78" y1="42" x2="64" y2="64" />
+                <line x1="38" y1="66" x2="64" y2="64" /><line x1="90" y1="68" x2="64" y2="64" />
+                <line x1="64" y1="64" x2="52" y2="88" /><line x1="64" y1="64" x2="78" y2="90" />
+            </g>
+            <circle cx="50" cy="44" r="5" fill="#38bdf8" /><circle cx="78" cy="42" r="5" fill="#2dd4bf" />
+            <circle cx="38" cy="66" r="4.5" fill="#38bdf8" /><circle cx="90" cy="68" r="4.5" fill="#2dd4bf" />
+            <circle cx="52" cy="88" r="5" fill="#2dd4bf" /><circle cx="78" cy="90" r="5" fill="#4ade80" />
+            <circle cx="64" cy="64" r="6.5" fill="#ffffff" />
+        </svg>
+        <div>
+            <h1>Synapse-Read</h1>
+            <p class="tagline">100% local-first Chrome Side Panel extension for article digests, semantic search, and AI briefings.</p>
+            <a class="btn-secondary" href="./story.html">&#9654; Watch the 2-Minute Story</a>
+        </div>
+    </header>
+
+    <!-- Step 1: Direct Pre-Built Download -->
+    <section class="card">
+        <h2>1. Download Pre-Built Extension</h2>
+        <p style="margin-top: 0; color: var(--muted); font-size: 14px;">
+            No Node.js or build tools required. Download the pre-compiled extension bundle and unzip it.
+        </p>
+        <a class="btn-primary" href="./synapse-read.zip" download="synapse-read.zip">
+            Download synapse-read.zip
+        </a>
+    </section>
+
+    <!-- Step 2: Drag & Drop Install onto chrome://extensions -->
+    <section class="card">
+        <h2>2. Drag &amp; Drop into Chrome</h2>
+        <ol class="steps">
+            <li>Unzip <code>synapse-read.zip</code> so you have a <code>synapse-read</code> folder.</li>
+            <li>
+                Open a new tab and go to <code>chrome://extensions</code>
+                <button class="btn-copy" data-copy="chrome://extensions">Copy URL</button>
+                (Chrome blocks direct links to internal settings pages).
+            </li>
+            <li>Toggle <strong>Developer mode</strong> ON in the top-right corner of <code>chrome://extensions</code>.</li>
+            <li><strong>Drag the unzipped <code>synapse-read</code> folder</strong> from Finder / Explorer and drop it anywhere onto the <code>chrome://extensions</code> tab.</li>
+        </ol>
+
+        <div id="drop-zone" class="drop-guide" style="margin-top: 16px;">
+            Browser security prevents web pages from installing extensions directly—make sure you drop the unzipped folder onto your <strong>chrome://extensions</strong> tab, not here.
+        </div>
+    </section>
+
+    <!-- Step 3: Live On-Device AI Readiness Check -->
+    <section class="card">
+        <h2>3. On-Device Gemini Nano Check</h2>
+        <div class="status-grid">
+            <div class="status-pill">
+                <strong>Summarizer API</strong>
+                <span id="status-summarizer">Checking...</span>
+            </div>
+            <div class="status-pill">
+                <strong>Prompt API (Nano)</strong>
+                <span id="status-prompt">Checking...</span>
+            </div>
+            <div class="status-pill">
+                <strong>Semantic Search (WASM)</strong>
+                <span class="ok">Ready (Bundled)</span>
+            </div>
+        </div>
+        <p style="margin: 0 0 10px; color: var(--muted); font-size: 13px;">
+            If either API shows <em>Flags Required</em>, copy and open each flag below in Desktop Chrome, set it to <strong>Enabled</strong> (or <strong>Enabled BypassPerfRequirement</strong>), and relaunch Chrome:
+        </p>
+        <div class="flag-row">
+            <code>chrome://flags/#optimization-guide-on-device-model</code>
+            <button class="btn-copy" data-copy="chrome://flags/#optimization-guide-on-device-model">Copy</button>
+        </div>
+        <div class="flag-row">
+            <code>chrome://flags/#prompt-api-for-gemini-nano</code>
+            <button class="btn-copy" data-copy="chrome://flags/#prompt-api-for-gemini-nano">Copy</button>
+        </div>
+        <div class="flag-row">
+            <code>chrome://flags/#summarization-api-for-gemini-nano</code>
+            <button class="btn-copy" data-copy="chrome://flags/#summarization-api-for-gemini-nano">Copy</button>
+        </div>
+    </section>
+
+    <!-- Step 4: End-to-End User Workflow -->
+    <section class="card">
+        <h2>4. User Workflow: Using Every Feature</h2>
+        <div class="workflow-grid">
+            <div class="wf-step">
+                <div class="wf-header">
+                    <span class="wf-badge">Step 1</span>
+                    <span class="wf-title">One-Time Offline AI Setup</span>
+                </div>
+                <div class="wf-body">
+                    Pin <strong>Synapse-Read</strong> to your Chrome toolbar and click it to open the Side Panel. If you see the setup banner at the top, click <span class="ui-pill">Download AI</span> once so Gemini Nano weights cache locally on your machine.
+                </div>
+            </div>
+
+            <div class="wf-step">
+                <div class="wf-header">
+                    <span class="wf-badge">Step 2</span>
+                    <span class="wf-title">Capture, Sync &amp; Hydrate Articles</span>
+                </div>
+                <div class="wf-body">
+                    <ul>
+                        <li><span class="ui-pill">Save Content</span> extracts clean article text from the active tab and automatically generates a local TL;DR digest + 384-dimension semantic vector in the background.</li>
+                        <li><span class="ui-pill">Save Link Only</span> bookmarks the URL immediately without parsing the page.</li>
+                        <li><span class="ui-pill">Sync List</span> imports links from Chrome's built-in Reading List (including items saved on mobile).</li>
+                        <li><span class="ui-pill">Fetch &amp; Digest</span> appears on link-only and Reading List cards—click it to fetch the article HTML in the background and generate its digest and embeddings in place.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="wf-step">
+                <div class="wf-header">
+                    <span class="wf-badge">Step 3</span>
+                    <span class="wf-title">Explore Connections &amp; Semantic Search</span>
+                </div>
+                <div class="wf-body">
+                    <ul>
+                        <li>Click <span class="ui-pill">Related</span> on any article card to reveal top conceptually similar articles across your full reading archive with similarity scores.</li>
+                        <li>Use the <strong>Semantic Search</strong> bar to query by topic or concept across <em>both</em> saved articles and your briefing reflections. Click <span class="ui-pill">Open</span> on any matching briefing note to jump directly to it.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="wf-step">
+                <div class="wf-header">
+                    <span class="wf-badge">Step 4</span>
+                    <span class="wf-title">Generate Date-Range Briefings</span>
+                </div>
+                <div class="wf-body">
+                    Choose <span class="ui-pill">7D</span>, <span class="ui-pill">14D</span>, <span class="ui-pill">30D</span>, or a custom date window and click <span class="ui-pill">Generate Briefing</span>. Gemini Nano synthesizes top takeaways with clickable citations, emerging themes, and a <strong>From Your Archive</strong> section linking older related reads. (In fallback mode, use <span class="ui-pill">Copy Prompt</span> to paste into any LLM.)
+                </div>
+            </div>
+
+            <div class="wf-step">
+                <div class="wf-header">
+                    <span class="wf-badge">Step 5</span>
+                    <span class="wf-title">Listen &amp; Write 1,000-Word Reflections</span>
+                </div>
+                <div class="wf-body">
+                    <ul>
+                        <li>Click <span class="ui-pill">Listen</span> inside any briefing card (and pick a natural system voice from the dropdown) for offline audio narration.</li>
+                        <li>Type up to <strong>1,000 words</strong> in <strong>My Notes &amp; Reflections</strong>—your notes auto-save to IndexedDB and are automatically indexed for semantic search.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="wf-step">
+                <div class="wf-header">
+                    <span class="wf-badge">Step 6</span>
+                    <span class="wf-title">Export Markdown &amp; Backup / Restore Archive</span>
+                </div>
+                <div class="wf-body">
+                    <ul>
+                        <li><span class="ui-pill">Export .md</span> (inside the briefing card) downloads a clean Markdown note with YAML frontmatter, the briefing summary, and your reflections—ready for Obsidian, Logseq, or Notion.</li>
+                        <li><span class="ui-pill">Backup</span> (top header) exports your entire IndexedDB database—including all articles, digests, 384-dimension embeddings, briefings, and notes—as a single <code>.

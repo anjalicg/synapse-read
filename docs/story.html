@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Synapse-Read — The 2-Minute Story</title>
+    <style>
+        :root {
+            --bg: #070b14;
+            --surface: #0f172a;
+            --surface-2: #162036;
+            --border: #24324d;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --cyan: #38bdf8;
+            --teal: #2dd4bf;
+            --green: #4ade80;
+            --amber: #fbbf24;
+            --rose: #fb7185;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at 50% 20%, #111c35 0%, var(--bg) 75%);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 24px;
+            border-bottom: 1px solid rgba(36, 50, 77, 0.7);
+            background: rgba(7, 11, 20, 0.75);
+            backdrop-filter: blur(8px);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text);
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .btn-ghost {
+            background: var(--surface-2);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .btn-ghost:hover {
+            border-color: var(--cyan);
+            background: #1d2b47;
+        }
+
+        .stage-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+        }
+
+        .stage {
+            width: 100%;
+            max-width: 860px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 80px rgba(56, 189, 248, 0.08);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 32px 32px 24px;
+            gap: 24px;
+        }
+
+        .scenes {
+            position: relative;
+            min-height: 360px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .scene {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(14px);
+            transition: opacity 0.55s ease, transform 0.55s ease;
+            pointer-events: none;
+        }
+
+        .scene.active {
+            position: relative;
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .scene-kicker {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--cyan);
+            margin-bottom: 8px;
+        }
+
+        .scene-headline {
+            font-size: clamp(21px, 3vw, 30px);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin: 0 0 18px;
+            max-width: 680px;
+        }
+
+        .visual-box {
+            width: 100%;
+            max-width: 640px;
+            min-height: 195px;
+            background: #090f1d;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+        }
+
+        .narration {
+            max-width: 650px;
+            font-size: 15px;
+            line-height: 1.65;
+            color: #cbd5e1;
+            margin: 0;
+        }
+
+        .narration em {
+            color: var(--teal);
+            font-style: italic;
+        }
+
+        /* Scene 1 Visual */
+        .graveyard-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+            width: 100%;
+            padding: 8px;
+            background: #131c31;
+            border-radius: 8px;
+            border: 1px solid #26344e;
+        }
+
+        .mini-tab {
+            flex: 1;
+            height: 24px;
+            border-radius: 5px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            color: var(--muted);
+            animation: tabPulse 2.8s infinite ease-in-out;
+        }
+
+        .mini-tab:nth-child(odd) { animation-delay: 0.4s; }
+        .mini-tab:nth-child(3n) { animation-delay: 0.8s; border-color: rgba(251, 113, 133, 0.45); }
+
+        @keyframes tabPulse {
+            0%, 100% { opacity: 0.45; transform: translateY(0); }
+            50% { opacity: 1; transform: translateY(-2px); }
+        }
+
+        .dusty-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px dashed #334155;
+            padding: 8px 12px;
+            border-radius: 7px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        /* Scene 2 Visual */
+        .privacy-flow {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            width: 100%;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .flow-node {
+            background: #131c31;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            width: 185px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .flow-node.local {
+            border-color: var(--teal);
+            box-shadow: 0 0 28px rgba(45, 212, 191, 0.2);
+        }
+
+        .flow-node.cloud {
+            opacity: 0.45;
+            border-color: var(--rose);
+            text-decoration: line-through;
+        }
+
+        /* Scene 3 Visual */
+        .split-browser {
+            display: grid;
+            grid-template-columns: 1.25fr 1fr;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .noisy-page {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            text-align: left;
+        }
+
+        .ad-banner {
+            background: rgba(251, 113, 133, 0.14);
+            border: 1px dashed rgba(251, 113, 133, 0.4);
+            color: var(--rose);
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .clean-panel {
+            background: #131c31;
+            border: 1px solid var(--cyan);
+            border-radius: 8px;
+            padding: 10px 12px;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        /* Scene 4 Visual */
+        .constellation {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .bridge-cards {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .b-card {
+            flex: 1;
+            min-width: 160px;
+            background: #131c31;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            padding: 10px;
+            text-align: left;
+            font-size: 11.5px;
+        }
+
+        .b-card.archive { border-color: var(--amber); }
+        .b-card.today { border-color: var(--cyan); }
+
+        .match-badge {
+            background: rgba(74, 222, 128, 0.15);
+            border: 1px solid var(--green);
+            color: var(--green);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 999px;
+            white-space: nowrap;
+        }
+
+        /* Scene 5 CTA */
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, var(--cyan), var(--teal));
+            color: #06101d;
+            font-weight: 800;
+            font-size: 14px;
+            padding: 11px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+        }
+
+        /* Bottom Timeline & Controls */
+        .controls {
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .timeline {
+            display: grid;
+            grid-template-columns: 25fr 20fr 25fr 30fr 20fr;
+            gap: 6px;
+        }
+
+        .seg {
+            height: 7px;
+            background: #1e293b;
+            border-radius: 999px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .seg-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--cyan), var(--teal));
+        }
+
+        .control-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .ctrl-btns {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .ctrl-btn {
+            background: var(--surface-2);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            padding: 6px 12px;
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .ctrl-btn:hover { border-color: var(--cyan); }
+
+        .ctrl-btn.music-prompt {
+            border-color: var(--teal);
+            color: var(--teal);
+        }
+
+        .eq-bars {
+            display: inline-flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 11px;
+            margin-right: 4px;
+        }
+
+        .eq-bars span {
+            width: 2.5px;
+            background: var(--teal);
+            border-radius: 2px;
+            animation: eq 0.9s infinite ease-in-out;
+        }
+
+        .eq-bars span:nth-child(2) { animation-delay: 0.2s; }
+        .eq-bars span:nth-child(3) { animation-delay: 0.4s; }
+        .eq-bars.paused span { animation: none; height: 3px !important; opacity: 0.4; }
+
+        @keyframes eq {
+            0%, 100% { height: 3px; }
+            50% { height: 11px; }
+        }
+    </style>
+</head>
+<body>
+<nav class="topbar">
+    <a class="brand" href="./index.html">
+        <svg viewBox="0 0 128 128" width="28" height="28" aria-hidden="true">
+            <rect x="4" y="4" width="120" height="120" rx="28" fill="#131c31" stroke="#334155" stroke-width="2" />
+            <g stroke="#2dd4bf" stroke-width="4" stroke-linecap="round">
+                <line x1="28" y1="44" x2="64" y2="64" /><line x1="100" y1="44" x2="64" y2="64" />
+                <line x1="28" y1="84" x2="64" y2="64" /><line x1="100" y1="84" x2="64" y2="64" />
+                <line x1="64" y1="24" x2="64" y2="104" />
+            </g>
+            <circle cx="64" cy="64" r="9" fill="#ffffff" />
+        </svg>
+        <span>Synapse-Read</span>
+    </a>
+    <a class="btn-ghost" href="./index.html">Install Extension &rarr;</a>
+</nav>
+
+<main class="stage-wrapper">
+    <div class="stage">
+        <div class="scenes">
+            <!-- Scene 1: 0:00 - 0:25 -->
+            <section class="scene active" data-scene="0">
+                <div class="scene-kicker">01 &middot; The Tab Graveyard</div>
+                <h2 class="scene-headline">Every saved link is a promise you made to your future self.</h2>
+                <div class="visual-box">
+                    <div class="graveyard-stack">
+                        <div class="tab-bar">
+                            <div class="mini-tab">AI...</div><div class="mini-tab">Sys...</div><div class="mini-tab">Why...</div>
+                            <div class="mini-tab">How...</div><div class="mini-tab">Deep...</div><div class="mini-tab">Note...</div>
+                            <div class="mini-tab">2025...</div><div class="mini-tab">Read...</div><div class="mini-tab">+34</div>
+                        </div>
+                        <div class="dusty-row">
+                            <span>&#128278; Chrome Reading List &middot; 148 unread items</span>
+                            <span style="color: var(--amber);">Saved 4 months ago</span>
+                        </div>
+                        <div class="dusty-row">
+                            <span>&#128193; Bookmarks / To-Read-Later</span>
+                            <span>Never opened again</span>
+                        </div>
+                    </div>
+                </div>
+                <p class="narration">
+                    Look at your browser right now. Forty open tabs. Hundreds of bookmarked articles. Each started as a spark—<em>“I’ll read this tonight.”</em> Instead, they turn into a graveyard of good intentions because life moved on before you had time to connect the dots.
+                </p>
+            </section>
+
+            <!-- Scene 2: 0:25 - 0:45 -->
+            <section class="scene" data-scene="1">
+                <div class="scene-kicker">02 &middot; The Privacy Trade-Off</div>
+                <h2 class="scene-headline">Your curiosity shouldn’t live on someone else’s server.</h2>
+                <div class="visual-box">
+                    <div class="privacy-flow">
+                        <div class="flow-node local">
+                            <strong style="color: var(--teal); display: block; margin-bottom: 4px;">Your Laptop</strong>
+                            IndexedDB + Gemini Nano + Local WASM
+                        </div>
+                        <div style="font-size: 18px; color: var(--green); font-weight: 800;">
+                            &#128274; 100% Local
+                        </div>
+                        <div class="flow-node cloud">
+                            <strong style="color: var(--rose); display: block; margin-bottom: 4px;">External Cloud</strong>
+                            Accounts, API Keys &amp; Tracking
+                        </div>
+                    </div>
+                </div>
+                <p class="narration">
+                    Asking cloud AI for help usually means handing over everything you read, highlight, and think about to remote servers. Your reading history is a map of your mind—it should belong only to you. Meet <strong>Synapse-Read</strong>.
+                </p>
+            </section>
+
+            <!-- Scene 3: 0:45 - 1:10 -->
+            <section class="scene" data-scene="2">
+                <div class="scene-kicker">03 &middot; Effortless Capture</div>
+                <h2 class="scene-headline">One click. Distraction-free. Zero bytes leave your device.</h2>
+                <div class="visual-box">
+                    <div class="split-browser">
+                        <div class="noisy-page">
+                            <div class="ad-banner">POPUP &middot; SUBSCRIBE &middot; COOKIE BANNER</div>
+                            <div style="font-size: 11px; color: var(--muted);">Long-form web article (4,200 words)...</div>
+                            <div class="ad-banner">SPONSORED SIDEBAR WIDGET</div>
+                        </div>
+                        <div class="clean-panel">
+                            <div>
+                                <div style="font-size: 11px; font-weight: 700; color: var(--cyan);">SYNAPSE-READ SIDE PANEL</div>
+                                <div style="font-size: 11.5px; color: var(--text); margin-top: 6px;">
+                                    &#10024; <strong>TL;DR Digest:</strong> Core thesis distilled locally in seconds.
+                                </div>
+                            </div>
+                            <div style="font-size: 10.5px; color: var(--green); font-weight: 600;">
+                                &#9679; 384-dim semantic vector indexed locally
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="narration">
+                    Synapse-Read lives quietly in your Chrome Side Panel. With one click, it strips away web clutter, saves clean prose locally, and distills a sharp digest using Chrome’s built-in on-device AI. No accounts. No API keys.
+                </p>
+            </section>
+
+            <!-- Scene 4: 1:10 - 1:40 -->
+            <section class="scene" data-scene="3">
+                <div class="scene-kicker">04 &middot; The &ldquo;Aha!&rdquo; Moment Across Time</div>
+                <h2 class="scene-headline">It remembers what you forgot you read.</h2>
+                <div class="visual-box">
+                    <div class="constellation">
+                        <div class="bridge-cards">
+                            <div class="b-card today">
+                                <div style="color: var(--cyan); font-weight: 700; font-size: 10px;">TODAY&rsquo;S BRIEFING</div>
+                                <div style="margin-top: 4px; color: var(--text);">Distributed Systems &amp; Local-First Sync</div>
+                            </div>
+                            <div class="match-badge">84% Semantic Match</div>
+                            <div class="b-card archive">
+                                <div style="color: var(--amber); font-weight: 700; font-size: 10px;">FROM YOUR ARCHIVE</div>
+                                <div style="margin-top: 4px; color: var(--text);">CRDTs &amp; Offline Storage (Saved 3 mo. ago)</div>
+                            </div>
+                        </div>
+                        <div style="background: #131c31; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; text-align: left; font-size: 11.5px; color: var(--muted);">
+                            &#127911; <strong style="color: var(--text);">Listen Audio Briefing</strong> &nbsp;&middot;&nbsp; &#9997;&#65039; <strong style="color: var(--text);">My Reflections:</strong> <em>&ldquo;Combine local IndexedDB with vector recall...&rdquo;</em>
+                        </div>
+                    </div>
+                </div>
+                <p class="narration">
+                    When you generate a 2-minute briefing—or click <strong>Listen</strong> over morning coffee—Synapse-Read doesn’t just summarize this week. It taps you on the shoulder and surfaces articles from months ago that connect directly to what you’re reading today.
+                </p>
+            </section>
+
+            <!-- Scene 5: 1:40 - 2:00 -->
+            <section class="scene" data-scene="4">
+                <div class="scene-kicker">05 &middot; Yours Forever</div>
+                <h2 class="scene-headline">Your private, local-first second brain.</h2>
+                <div class="visual-box">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                            <span style="background: #131c31; border: 1px solid var(--cyan); padding: 6px 12px; border-radius: 8px; font-size: 12px;">&#128196; Export .md (Obsidian / Notion)</span>
+                            <span style="background: #131c31; border: 1px solid var(--teal); padding: 6px 12px; border-radius: 8px; font-size: 12px;">&#128190; Full JSON Backup &amp; Restore</span>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 4px;">
+                            <a class="btn-primary" href="./synapse-read.zip" download="synapse-read.zip">
+                                &#11015; Download synapse-read.zip
+                            </a>
+                            <a class="btn-ghost" href="./index.html" style="padding: 10px 16px;">
+                                Install &amp; Workflow Guide
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <p class="narration">
+                    Your notes stay portable in clean Markdown. Your archive stays yours forever. Zero servers. Zero subscriptions. Just your curiosity, finally connected.
+                </p>
+            </section>
+        </div>
+
+        <div class="controls">
+            <div class="timeline">
+                <div class="seg" data-idx="0"><div class="seg-fill"></div></div>
+                <div class="seg" data-idx="1"><div class="seg-fill"></div></div>
+                <div class="seg" data-idx="2"><div class="seg-fill"></div></div>
+                <div class="seg" data-idx="3"><div class="seg-fill"></div></div>
+                <div class="seg" data-idx="4"><div class="seg-fill"></div></div>
+            </div>
+
+            <div class="control-bar">
+                <div class="ctrl-btns">
+                    <button id="btn-prev" class="ctrl-btn">&larr; Prev</button>
+                    <button id="btn-playpause" class="ctrl-btn">Pause</button>
+                    <button id="btn-next" class="ctrl-btn">Next &rarr;</button>
+                    <button id="btn-mute" class="ctrl-btn music-prompt">
+                        <span id="eq-bars" class="eq-bars paused"><span></span><span></span><span></span></span>
+                        <span id="mute-label">Enable Music</span>
+                    </button>
+                </div>
+                <div>
+                    <span id="scene-counter">Scene 1 / 5</span> &nbsp;&middot;&nbsp;
+                    <span id="time-display">0:00 / 2:00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    const DURATIONS = [25, 20, 25, 30, 20];
+    const TOTAL_SECONDS = DURATIONS.reduce((a, b) => a + b, 0);
+    const STARTS = DURATIONS.reduce((acc, d, i) => {
+        acc.push(i === 0 ? 0 : acc[i - 1] + DURATIONS[i - 1]);
+        return acc;
+    }, []);
+
+    let elapsed = 0;
+    let isPlaying = true;
+    let lastTimestamp = null;
+    let activeScene = 0;
+
+    const scenes = Array.from(document.querySelectorAll('.scene'));
+    const segFills = Array.from(document.querySelectorAll('.seg-fill'));
+    const btnPlayPause = document.getElementById('btn-playpause');
+    const timeDisplay = document.getElementById('time-display');
+    const sceneCounter = document.getElementById('scene-counter');
+    const btnMute = document.getElementById('btn-mute');
+    const eqBars = document.getElementById('eq-bars');
+    const muteLabel = document.getElementById('mute-label');
+
+    // --- Procedural Ambient Music (Web Audio API) ---
+    let audioCtx = null;
+    let masterGain = null;
+    let isMuted = false;
+    let chordStep = 0;
+
+    const CHORDS = [
+        [174.61, 220.0, 261.63, 329.63], // Fmaj7
+        [130.81, 196.0, 246.94, 329.63], // Cmaj7
+        [110.0, 164.81, 196.0, 261.63],  // Am7
+        [98.0, 146.83, 196.0, 246.94],   // G6
+    ];
+    const BELL_NOTES = [523.25, 659.25, 587.33, 493.88, 783.99];
+
+    function updateMusicUI() {
+        const active = audioCtx && audioCtx.state === 'running' && !isMuted;
+        eqBars.classList.toggle('paused', !active);
+        btnMute.classList.toggle('music-prompt', !active && !isMuted);
+        muteLabel.textContent = isMuted ? 'Muted' : active ? 'Music On' : 'Enable Music';
+    }
+
+    function initAudio() {
+        if (!audioCtx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            audioCtx = new AudioContext();
+
+            masterGain = audioCtx.createGain();
+            masterGain.gain.setValueAtTime(0.16, audioCtx.currentTime);
+
+            const delay = audioCtx.createDelay();
+            delay.delayTime.value = 0.42;
+            const feedback = audioCtx.createGain();
+            feedback.gain.value = 0.3;
+            const delayFilter = audioCtx.createBiquadFilter();
+            delayFilter.type = 'lowpass';
+            delayFilter.frequency.value = 1100;
+
+            delay.connect(feedback);
+            feedback.connect(delayFilter);
+            delayFilter.connect(delay);
+            delay.connect(masterGain);
+            masterGain.connect(audioCtx.destination);
+
+            function playPadChord() {
+                if (!audioCtx || audioCtx.state !== 'running' || isMuted) return;
+                const now = audioCtx.currentTime;
+                const freqs = CHORDS[chordStep % CHORDS.length];
+                chordStep++;
+
+                freqs.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const filter = audioCtx.createBiquadFilter();
+                    const noteGain = audioCtx.createGain();
+
+                    osc.type = idx === 0 ? 'sine' : 'triangle';
+                    osc.frequency.setValueAtTime(freq, now);
+
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(650, now);
+
+                    noteGain.gain.setValueAtTime(0.0001, now);
+                    noteGain.gain.linearRampToValueAtTime(idx === 0 ? 0.22 : 0.11, now + 1.4);
+                    noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 4.6);
+
+                    osc.connect(filter);
+                    filter.connect(noteGain);
+                    noteGain.connect(masterGain);
+                    noteGain.connect(delay);
+
+                    osc.start(now);
+                    osc.stop(now + 4.8);
+                });
+            }
+
+            playPadChord();
+            setInterval(playPadChord, 4200);
+        }
+
+        if (audioCtx.state === 'suspended' && !isMuted) {
+            audioCtx.resume().then(updateMusicUI).catch(() => {});
+        }
+        updateMusicUI();
+    }
+
+    function playSceneChime(sceneIdx) {
+        if (!audioCtx || audioCtx.state !== 'running' || isMuted) return;
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(BELL_NOTES[sceneIdx % BELL_NOTES.length], now);
+
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.09, now + 0.06);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.start(now);
+        osc.stop(now + 1.9);
+    }
+
+    function formatTime(sec) {
+        const s = Math.floor(sec);
+        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+
+    function render() {
+        let idx = 0;
+        for (let i = 0; i < STARTS.length; i++) {
+            if (elapsed >= STARTS[i]) idx = i;
+        }
+
+        if (idx !== activeScene) {
+            activeScene = idx;
+            playSceneChime(idx);
+        }
+
+        scenes.forEach((el, i) => el.classList.toggle('active', i === activeScene));
+
+        segFills.forEach((fill, i) => {
+            const pct = Math.max(0, Math.min(100, ((elapsed - STARTS[i]) / DURATIONS[i]) * 100));
+            fill.style.width = `${pct}%`;
+        });
+
+        sceneCounter.textContent = `Scene ${activeScene + 1} / 5`;
+        timeDisplay.textContent = `${formatTime(elapsed)} / 2:00`;
+        btnPlayPause.textContent = isPlaying ? 'Pause' : elapsed >= TOTAL_SECONDS ? 'Replay' : 'Play';
+    }
+
+    function tick(timestamp) {
+        if (!isPlaying) {
+            lastTimestamp = null;
+            return;
+        }
+        if (lastTimestamp != null) {
+            elapsed = Math.min(TOTAL_SECONDS, elapsed + (timestamp - lastTimestamp) / 1000);
+            render();
+            if (elapsed >= TOTAL_SECONDS) {
+                isPlaying = false;
+                render();
+                return;
+            }
+        }
+        lastTimestamp = timestamp;
+        requestAnimationFrame(tick);
+    }
+
+    function togglePlayPause() {
+        initAudio();
+        if (isPlaying) {
+            isPlaying = false;
+            audioCtx?.suspend().then(updateMusicUI);
+            render();
+        } else {
+            if (elapsed >= TOTAL_SECONDS) elapsed = 0;
+            isPlaying = true;
+            lastTimestamp = null;
+            if (audioCtx && !isMuted) audioCtx.resume().then(updateMusicUI);
+            render();
+            requestAnimationFrame(tick);
+        }
+    }
+
+    function jumpToScene(idx) {
+        initAudio();
+        const clamped = Math.max(0, Math.min(4, idx));
+        elapsed = STARTS[clamped];
+        activeScene = clamped;
+        playSceneChime(clamped);
+        render();
+    }
+
+    btnMute.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!audioCtx || audioCtx.state === 'suspended') {
+            isMuted = false;
+            initAudio();
+            return;
+        }
+        isMuted = !isMuted;
+        if (isMuted) audioCtx.suspend().then(updateMusicUI);
+        else audioCtx.resume().then(updateMusicUI);
+    });
+
+    btnPlayPause.addEventListener('click', togglePlayPause);
+    document.getElementById('btn-prev').addEventListener('click', () => jumpToScene(activeScene - 1));
+    document.getElementById('btn-next').addEventListener('click', () => jumpToScene(activeScene + 1));
+
+    document.querySelectorAll('.seg').forEach((seg) => {
+        seg.addEventListener('click', () => jumpToScene(Number(seg.getAttribute('data-idx'))));
+    });
+
+    // Unlock ambient music automatically on first click/keypress anywhere
+    document.addEventListener('pointerdown', () => {
+        if (!isMuted) initAudio();
+    }, { once: true });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            togglePlayPause();
+        } else if (e.code === 'ArrowLeft') {
+            jumpToScene(activeScene - 1);
+        } else if (e.code === 'ArrowRight') {
+            jumpToScene(activeScene + 1);
+        } else if (e.key.toLowerCase() === 'm') {
+            btnMute.click();
+        }
+    });
+
+    // Start visual presentation immediately on load
+    initAudio();
+    render();
+    requestAnimationFrame(tick);
+</script>
+</body>
+</html>
