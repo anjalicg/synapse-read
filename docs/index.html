@@ -1,897 +1,864 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Synapse-Read — Local-First Knowledge Graph for Chrome</title>
-    <style>
-        :root {
-            --paper: #F6F4EF;
-            --paper-dot: #D5D0C5;
-            --card: #FFFDF9;
-            --ink: #1E1D1A;
-            --ink-muted: #5C5952;
-            --line: #C7C1B5;
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Synapse-Read — Local-First Knowledge Graph for Chrome</title>
+  <style>
+    :root {
+      --paper: #F6F4EF;
+      --paper-dot: #D5D0C5;
+      --card: #FFFDF9;
+      --ink: #1E1D1A;
+      --ink-muted: #5C5952;
+      --line: #C7C1B5;
 
-            /* Quirky minimalistic risograph accents */
-            --terracotta: #E05A47;
-            --ochre: #D99B26;
-            --sage: #3D7A5D;
-            --periwinkle: #4C6EF5;
-            --plum: #9C528B;
-        }
+      --terracotta: #E05A47;
+      --ochre: #D99B26;
+      --sage: #3D7A5D;
+      --periwinkle: #4C6EF5;
+      --plum: #9C528B;
+    }
 
-        * { box-sizing: border-box; }
+    * { box-sizing: border-box; }
 
-        body {
-            margin: 0;
-            background-color: var(--paper);
-            background-image: radial-gradient(var(--paper-dot) 1.15px, transparent 1.15px);
-            background-size: 22px 22px;
-            color: var(--ink);
-            font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
-            line-height: 1.55;
-            padding: 36px 20px 80px;
-        }
+    body {
+      margin: 0;
+      background-color: var(--paper);
+      background-image: radial-gradient(var(--paper-dot) 1.15px, transparent 1.15px);
+      background-size: 22px 22px;
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      line-height: 1.55;
+      padding: 36px 20px 80px;
+    }
 
-        .graph-wrapper {
-            position: relative;
-            max-width: 960px;
-            margin: 0 auto;
-        }
+    .graph-wrapper {
+      position: relative;
+      max-width: 960px;
+      margin: 0 auto;
+    }
 
-        /* Dynamic SVG Knowledge Graph Layer */
-        #graph-svg {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 1;
-        }
+    #graph-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
 
-        .edge-primary {
-            fill: none;
-            stroke: var(--ink);
-            stroke-width: 1.6;
-            stroke-opacity: 0.28;
-            transition: stroke 0.25s ease, stroke-width 0.25s ease, stroke-opacity 0.25s ease;
-        }
+    .edge-primary {
+      fill: none;
+      stroke: var(--ink);
+      stroke-width: 1.6;
+      stroke-opacity: 0.28;
+      transition: stroke 0.25s ease, stroke-width 0.25s ease, stroke-opacity 0.25s ease;
+    }
 
-        .edge-semantic {
-            fill: none;
-            stroke: var(--ink-muted);
-            stroke-width: 1.3;
-            stroke-dasharray: 4 5;
-            stroke-opacity: 0.24;
-            transition: stroke 0.25s ease, stroke-width 0.25s ease, stroke-opacity 0.25s ease;
-        }
+    .edge-semantic {
+      fill: none;
+      stroke: var(--ink-muted);
+      stroke-width: 1.3;
+      stroke-dasharray: 4 5;
+      stroke-opacity: 0.24;
+      transition: stroke 0.25s ease, stroke-width 0.25s ease, stroke-opacity 0.25s ease;
+    }
 
-        .edge-primary.active,
-        .edge-semantic.active {
-            stroke-opacity: 1;
-            stroke-width: 2.4;
-        }
+    .edge-primary.active,
+    .edge-semantic.active {
+      stroke-opacity: 1;
+      stroke-width: 2.4;
+    }
 
-        /* Root Hub Node */
-        .hub-container {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            justify-content: center;
-            margin-bottom: 56px;
-        }
+    .hub-container {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 56px;
+    }
 
-        .hub-card {
-            background: var(--card);
-            border: 1.75px solid var(--ink);
-            border-radius: 16px;
-            box-shadow: 4px 4px 0 var(--ink);
-            padding: 24px 28px;
-            max-width: 560px;
-            width: 100%;
-            text-align: center;
-            position: relative;
-        }
+    .hub-card {
+      background: var(--card);
+      border: 1.75px solid var(--ink);
+      border-radius: 16px;
+      box-shadow: 4px 4px 0 var(--ink);
+      padding: 24px 28px;
+      max-width: 560px;
+      width: 100%;
+      text-align: center;
+      position: relative;
+    }
 
-        .hub-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: var(--ink-muted);
-            background: var(--paper);
-            border: 1px solid var(--ink);
-            border-radius: 999px;
-            padding: 2px 10px;
-            margin-bottom: 10px;
-        }
+    .hub-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-muted);
+      background: var(--paper);
+      border: 1px solid var(--ink);
+      border-radius: 999px;
+      padding: 2px 10px;
+      margin-bottom: 10px;
+    }
 
-        .hub-title-row {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            margin-bottom: 6px;
-        }
+    .hub-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
 
-        h1 {
-            margin: 0;
-            font-size: 28px;
-            font-weight: 800;
-            letter-spacing: -0.025em;
-        }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+    }
 
-        .hub-tagline {
-            margin: 0 auto 18px;
-            max-width: 440px;
-            font-size: 14.5px;
-            color: var(--ink-muted);
-        }
+    .hub-tagline {
+      margin: 0 auto 18px;
+      max-width: 440px;
+      font-size: 14.5px;
+      color: var(--ink-muted);
+    }
 
-        .hub-actions {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
+    .hub-actions {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
 
-        .btn-download {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--terracotta);
-            color: #FFFDF9;
-            border: 1.5px solid var(--ink);
-            box-shadow: 2.5px 2.5px 0 var(--ink);
-            border-radius: 9px;
-            padding: 9px 16px;
-            font-size: 13.5px;
-            font-weight: 700;
-            text-decoration: none;
-            transition: transform 0.12s ease, box-shadow 0.12s ease;
-        }
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--terracotta);
+      color: #FFFDF9;
+      border: 1.5px solid var(--ink);
+      box-shadow: 2.5px 2.5px 0 var(--ink);
+      border-radius: 9px;
+      padding: 9px 16px;
+      font-size: 13.5px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
 
-        .btn-download:hover {
-            transform: translate(-1px, -1px);
-            box-shadow: 3.5px 3.5px 0 var(--ink);
-        }
+    .btn-download:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 3.5px 3.5px 0 var(--ink);
+    }
 
-        .btn-story {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: var(--paper);
-            color: var(--ink);
-            border: 1.5px solid var(--ink);
-            box-shadow: 2.5px 2.5px 0 var(--ink);
-            border-radius: 9px;
-            padding: 9px 15px;
-            font-size: 13.5px;
-            font-weight: 600;
-            text-decoration: none;
-            transition: transform 0.12s ease, box-shadow 0.12s ease;
-        }
+    .btn-story {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--paper);
+      color: var(--ink);
+      border: 1.5px solid var(--ink);
+      box-shadow: 2.5px 2.5px 0 var(--ink);
+      border-radius: 9px;
+      padding: 9px 15px;
+      font-size: 13.5px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
 
-        .btn-story:hover {
-            transform: translate(-1px, -1px);
-            box-shadow: 3.5px 3.5px 0 var(--ink);
-        }
+    .btn-story:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 3.5px 3.5px 0 var(--ink);
+    }
 
-        /* Hub bottom anchor port */
-        .hub-port {
-            position: absolute;
-            bottom: -8px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: var(--ink);
-            border: 2.5px solid var(--card);
-        }
+    .hub-port {
+      position: absolute;
+      bottom: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--ink);
+      border: 2.5px solid var(--card);
+    }
 
-        /* Cluster Divider Label */
-        .cluster-label {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            justify-content: center;
-            margin: 12px 0 26px;
-        }
+    .cluster-label {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      justify-content: center;
+      margin: 12px 0 26px;
+    }
 
-        .cluster-label span {
-            background: var(--paper);
-            border: 1px solid var(--line);
-            border-radius: 999px;
-            padding: 3px 12px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            font-size: 11px;
-            color: var(--ink-muted);
-            letter-spacing: 0.04em;
-        }
+    .cluster-label span {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      color: var(--ink-muted);
+      letter-spacing: 0.04em;
+    }
 
-        /* Staggered Two-Column Graph Leaf Grid */
-        .leaf-grid {
-            position: relative;
-            z-index: 2;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            column-gap: 96px;
-            row-gap: 28px;
-            align-items: start;
-            margin-bottom: 40px;
-        }
+    .leaf-grid {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 96px;
+      row-gap: 28px;
+      align-items: start;
+      margin-bottom: 40px;
+    }
 
-        .leaf-card {
-            --accent: var(--sage);
-            background: var(--card);
-            border: 1.5px solid var(--ink);
-            border-radius: 14px;
-            box-shadow: 3px 3px 0 var(--ink);
-            padding: 18px 20px;
-            position: relative;
-            transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.25s ease;
-        }
+    .leaf-card {
+      --accent: var(--sage);
+      background: var(--card);
+      border: 1.5px solid var(--ink);
+      border-radius: 14px;
+      box-shadow: 3px 3px 0 var(--ink);
+      padding: 18px 20px;
+      position: relative;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.25s ease;
+    }
 
-        /* Stagger right-hand column leaves to create an organic graph silhouette */
-        .leaf-card:nth-child(even) {
-            margin-top: 34px;
-        }
+    .leaf-card:nth-child(even) {
+      margin-top: 34px;
+    }
 
-        .leaf-card:hover,
-        .leaf-card.is-focused {
-            transform: translate(-2px, -2px);
-            box-shadow: 5px 5px 0 var(--accent);
-            border-color: var(--ink);
-        }
+    .leaf-card:hover,
+    .leaf-card.is-focused {
+      transform: translate(-2px, -2px);
+      box-shadow: 5px 5px 0 var(--accent);
+      border-color: var(--ink);
+    }
 
-        .leaf-card.is-dimmed {
-            opacity: 0.45;
-        }
+    .leaf-card.is-dimmed {
+      opacity: 0.45;
+    }
 
-        .leaf-card.is-connected {
-            opacity: 1;
-            border-color: var(--accent);
-        }
+    .leaf-card.is-connected {
+      opacity: 1;
+      border-color: var(--accent);
+    }
 
-        /* Connection Port Dots facing the central graph spine */
-        .leaf-port {
-            position: absolute;
-            top: 24px;
-            width: 13px;
-            height: 13px;
-            border-radius: 50%;
-            background: var(--accent);
-            border: 2px solid var(--ink);
-        }
+    .leaf-port {
+      position: absolute;
+      top: 24px;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--ink);
+    }
 
-        .leaf-card:nth-child(odd) .leaf-port {
-            right: -7.5px;
-        }
+    .leaf-card:nth-child(odd) .leaf-port {
+      right: -7.5px;
+    }
 
-        .leaf-card:nth-child(even) .leaf-port {
-            left: -7.5px;
-        }
+    .leaf-card:nth-child(even) .leaf-port {
+      left: -7.5px;
+    }
 
-        .leaf-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            font-size: 11px;
-        }
+    .leaf-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+    }
 
-        .leaf-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-weight: 700;
-            color: var(--accent);
-        }
+    .leaf-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      color: var(--accent);
+    }
 
-        .leaf-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--accent);
-            display: inline-block;
-        }
+    .leaf-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: inline-block;
+    }
 
-        .leaf-links-hint {
-            color: var(--ink-muted);
-            font-size: 10.5px;
-        }
+    .leaf-links-hint {
+      color: var(--ink-muted);
+      font-size: 10.5px;
+    }
 
-        .leaf-card h2 {
-            margin: 0 0 8px;
-            font-size: 16.5px;
-            font-weight: 750;
-            letter-spacing: -0.015em;
-        }
+    .leaf-card h2 {
+      margin: 0 0 8px;
+      font-size: 16.5px;
+      font-weight: 750;
+      letter-spacing: -0.015em;
+    }
 
-        .leaf-card p {
-            margin: 0;
-            font-size: 13.5px;
-            color: var(--ink-muted);
-        }
+    .leaf-card p {
+      margin: 0;
+      font-size: 13.5px;
+      color: var(--ink-muted);
+    }
 
-        .leaf-list {
-            margin: 6px 0 0;
-            padding-left: 16px;
-            font-size: 13px;
-            color: var(--ink-muted);
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
+    .leaf-list {
+      margin: 6px 0 0;
+      padding-left: 16px;
+      font-size: 13px;
+      color: var(--ink-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
 
-        .leaf-list li::marker {
-            color: var(--accent);
-        }
+    .leaf-list li::marker {
+      color: var(--accent);
+    }
 
-        /* Inline UI Chips & Code */
-        .chip {
-            display: inline-block;
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            font-size: 11.5px;
-            font-weight: 600;
-            background: var(--paper);
-            border: 1px solid var(--ink);
-            border-radius: 5px;
-            padding: 0 6px;
-            color: var(--ink);
-        }
+    .chip {
+      display: inline-block;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11.5px;
+      font-weight: 600;
+      background: var(--paper);
+      border: 1px solid var(--ink);
+      border-radius: 5px;
+      padding: 0 6px;
+      color: var(--ink);
+    }
 
-        code {
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            font-size: 11.5px;
-            background: var(--paper);
-            border: 1px solid var(--line);
-            border-radius: 4px;
-            padding: 1px 5px;
-            color: var(--ink);
-            word-break: break-all;
-        }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11.5px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: var(--ink);
+      word-break: break-all;
+    }
 
-        .btn-copy {
-            background: var(--paper);
-            color: var(--ink);
-            border: 1px solid var(--ink);
-            border-radius: 5px;
-            padding: 2px 8px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            flex-shrink: 0;
-        }
+    .btn-copy {
+      background: var(--paper);
+      color: var(--ink);
+      border: 1px solid var(--ink);
+      border-radius: 5px;
+      padding: 2px 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
 
-        .btn-copy:hover {
-            background: var(--ink);
-            color: var(--card);
-        }
+    .btn-copy:hover {
+      background: var(--ink);
+      color: var(--card);
+    }
 
-        /* Diagnostics & Flags inside Leaf 02 */
-        .diag-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 6px 8px;
-            background: var(--paper);
-            border: 1px solid var(--line);
-            border-radius: 6px;
-            font-size: 12px;
-            margin-top: 6px;
-        }
+    .diag-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font-size: 12px;
+      margin-top: 6px;
+    }
 
-        .status-ok { color: var(--sage); font-weight: 700; font-family: monospace; }
-        .status-warn { color: var(--terracotta); font-weight: 700; font-family: monospace; }
+    .status-ok { color: var(--sage); font-weight: 700; font-family: monospace; }
+    .status-warn { color: var(--terracotta); font-weight: 700; font-family: monospace; }
 
-        .flag-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 6px;
-            margin-top: 6px;
-        }
+    .flag-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+    }
 
-        /* Drag & Drop Guide Pill inside Leaf 01 */
-        .drop-note {
-            margin-top: 10px;
-            padding: 8px 10px;
-            border: 1.5px dashed var(--terracotta);
-            border-radius: 8px;
-            background: rgba(224, 90, 71, 0.06);
-            font-size: 12px;
-            color: var(--ink);
-            transition: background 0.15s ease;
-        }
+    .drop-note {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border: 1.5px dashed var(--terracotta);
+      border-radius: 8px;
+      background: rgba(224, 90, 71, 0.06);
+      font-size: 12px;
+      color: var(--ink);
+      transition: background 0.15s ease;
+    }
 
-        .drop-note.dragover {
-            background: rgba(224, 90, 71, 0.18);
-        }
+    .drop-note.dragover {
+      background: rgba(224, 90, 71, 0.18);
+    }
 
-        /* Responsive Single-Spine Layout on Mobile */
-        @media (max-width: 760px) {
-            .leaf-grid {
-                grid-template-columns: 1fr;
-                padding-left: 26px;
-                row-gap: 20px;
-            }
-            .leaf-card:nth-child(even) {
-                margin-top: 0;
-            }
-            .leaf-card:nth-child(odd) .leaf-port,
-            .leaf-card:nth-child(even) .leaf-port {
-                left: -7.5px;
-                right: auto;
-            }
-        }
-    </style>
+    @media (max-width: 760px) {
+      .leaf-grid {
+        grid-template-columns: 1fr;
+        padding-left: 26px;
+        row-gap: 20px;
+      }
+      .leaf-card:nth-child(even) {
+        margin-top: 0;
+      }
+      .leaf-card:nth-child(odd) .leaf-port,
+      .leaf-card:nth-child(even) .leaf-port {
+        left: -7.5px;
+        right: auto;
+      }
+    }
+  </style>
 </head>
 <body>
-<div id="graph-wrapper" class="graph-wrapper">
-    <!-- Live SVG Edges -->
+  <div id="graph-wrapper" class="graph-wrapper">
     <svg id="graph-svg" aria-hidden="true"></svg>
 
-    <!-- Central Root Hub -->
     <header class="hub-container">
-        <div class="hub-card" id="hub-node">
-            <div class="hub-badge">
-                <span>&#9679; local-first knowledge graph</span>
-                <span>&middot;</span>
-                <span>mv3</span>
-            </div>
-            <div class="hub-title-row">
-                <svg viewBox="0 0 128 128" width="36" height="36" aria-hidden="true">
-                    <rect x="4" y="4" width="120" height="120" rx="26" fill="#1E1D1A" />
-                    <g stroke="#D99B26" stroke-width="3" stroke-opacity="0.55" stroke-linecap="round">
-                        <line x1="34" y1="36" x2="94" y2="38" />
-                        <line x1="30" y1="88" x2="96" y2="86" />
-                        <line x1="34" y1="36" x2="96" y2="86" />
-                    </g>
-                    <g stroke="#E05A47" stroke-width="4.5" stroke-linecap="round">
-                        <line x1="34" y1="36" x2="64" y2="64" />
-                        <line x1="94" y1="38" x2="64" y2="64" />
-                        <line x1="30" y1="88" x2="64" y2="64" />
-                        <line x1="96" y1="86" x2="64" y2="64" />
-                    </g>
-                    <circle cx="34" cy="36" r="6" fill="#E05A47" />
-                    <circle cx="94" cy="38" r="6" fill="#D99B26" />
-                    <circle cx="30" cy="88" r="6" fill="#3D7A5D" />
-                    <circle cx="96" cy="86" r="6" fill="#4C6EF5" />
-                    <circle cx="64" cy="64" r="9" fill="#FFFDF9" />
-                </svg>
-                <h1>Synapse-Read</h1>
-            </div>
-            <p class="hub-tagline">
-                Capture articles, distill on-device digests, and link forgotten ideas across time—100% locally inside Chrome.
-            </p>
-            <div class="hub-actions">
-                <a class="btn-download" href="./synapse-read.zip" download="synapse-read.zip">
-                    &#11015; Download synapse-read.zip
-                </a>
-                <a class="btn-story" href="./story.html">
-                    &#9654; 2-Min Story
-                </a>
-            </div>
-            <div id="hub-port" class="hub-port"></div>
+      <div class="hub-card" id="hub-node">
+        <div class="hub-badge">
+          <span>&#9679; local-first knowledge graph</span>
+          <span>&middot;</span>
+          <span>mv3</span>
         </div>
+        <div class="hub-title-row">
+          <svg viewBox="0 0 128 128" width="36" height="36" aria-hidden="true">
+            <rect x="4" y="4" width="120" height="120" rx="26" fill="#1E1D1A" />
+            <g stroke="#D99B26" stroke-width="3" stroke-opacity="0.55" stroke-linecap="round">
+              <line x1="34" y1="36" x2="94" y2="38" />
+              <line x1="30" y1="88" x2="96" y2="86" />
+              <line x1="34" y1="36" x2="96" y2="86" />
+            </g>
+            <g stroke="#E05A47" stroke-width="4.5" stroke-linecap="round">
+              <line x1="34" y1="36" x2="64" y2="64" />
+              <line x1="94" y1="38" x2="64" y2="64" />
+              <line x1="30" y1="88" x2="64" y2="64" />
+              <line x1="96" y1="86" x2="64" y2="64" />
+            </g>
+            <circle cx="34" cy="36" r="6" fill="#E05A47" />
+            <circle cx="94" cy="38" r="6" fill="#D99B26" />
+            <circle cx="30" cy="88" r="6" fill="#3D7A5D" />
+            <circle cx="96" cy="86" r="6" fill="#4C6EF5" />
+            <circle cx="64" cy="64" r="9" fill="#FFFDF9" />
+          </svg>
+          <h1>Synapse-Read</h1>
+        </div>
+        <p class="hub-tagline">
+          Capture articles, attach per-post notes, and link forgotten ideas across 10,000+ reads—100% locally inside Chrome.
+        </p>
+        <div class="hub-actions">
+          <a class="btn-download" href="./synapse-read.zip" download="synapse-read.zip">
+            &#11015; Download synapse-read.zip
+          </a>
+          <a class="btn-story" href="./story.html">
+            &#9654; 2-Min Story
+          </a>
+        </div>
+        <div id="hub-port" class="hub-port"></div>
+      </div>
     </header>
 
-    <!-- Branch 1: Setup & On-Device Engine -->
     <div class="cluster-label">
-        <span>branch // 01 &mdash; setup &amp; local runtime</span>
+      <span>branch // 01 &mdash; setup &amp; local runtime</span>
     </div>
 
     <div class="leaf-grid">
-        <!-- Leaf 1: Install -->
-        <article
-                class="leaf-card"
-                data-leaf="install"
-                data-links="runtime,warmup"
-                style="--accent: var(--terracotta);"
-        >
-            <div class="leaf-port"></div>
-            <div class="leaf-meta">
-                <span class="leaf-tag"><i class="leaf-dot"></i> node:install</span>
-                <span class="leaf-links-hint">zero-build</span>
-            </div>
-            <h2>Drag &amp; Drop into Chrome</h2>
-            <ol class="leaf-list">
-                <li>Unzip <code>synapse-read.zip</code> to get the <code>synapse-read</code> folder.</li>
-                <li>
-                    Open <code>chrome://extensions</code>
-                    <button class="btn-copy" data-copy="chrome://extensions">Copy</button>
-                    and toggle <strong>Developer mode</strong> ON.
-                </li>
-                <li>Drag the unzipped folder onto the <code>chrome://extensions</code> tab.</li>
-            </ol>
-            <div id="drop-zone" class="drop-note">
-                Drop your unzipped folder onto the <strong>chrome://extensions</strong> tab (browsers block direct installs from web pages).
-            </div>
-        </article>
+      <article
+        class="leaf-card"
+        data-leaf="install"
+        data-links="runtime,warmup"
+        style="--accent: var(--terracotta);"
+      >
+        <div class="leaf-port"></div>
+        <div class="leaf-meta">
+          <span class="leaf-tag"><i class="leaf-dot"></i> node:install</span>
+          <span class="leaf-links-hint">zero-build</span>
+        </div>
+        <h2>Drag &amp; Drop into Chrome</h2>
+        <ol class="leaf-list">
+          <li>Unzip <code>synapse-read.zip</code> to get the <code>synapse-read</code> folder.</li>
+          <li>
+            Open <code>chrome://extensions</code>
+            <button class="btn-copy" data-copy="chrome://extensions">Copy</button>
+            and toggle <strong>Developer mode</strong> ON.
+          </li>
+          <li>Drag the unzipped folder onto the <code>chrome://extensions</code> tab.</li>
+        </ol>
+        <div id="drop-zone" class="drop-note">
+          Drop your unzipped folder onto the <strong>chrome://extensions</strong> tab (browsers block direct installs from web pages).
+        </div>
+      </article>
 
-        <!-- Leaf 2: On-Device AI Probe -->
-        <article
-                class="leaf-card"
-                data-leaf="runtime"
-                data-links="install,warmup,briefings"
-                style="--accent: var(--ochre);"
-        >
-            <div class="leaf-port"></div>
-            <div class="leaf-meta">
-                <span class="leaf-tag"><i class="leaf-dot"></i> node:on-device-ai</span>
-                <span class="leaf-links-hint">live browser check</span>
-            </div>
-            <h2>Gemini Nano &amp; WASM Check</h2>
-            <div class="diag-row">
-                <span>Summarizer API</span>
-                <span id="status-summarizer">Checking...</span>
-            </div>
-            <div class="diag-row">
-                <span>Prompt API (Nano)</span>
-                <span id="status-prompt">Checking...</span>
-            </div>
-            <div class="diag-row">
-                <span>MiniLM-L6-v2 Embeddings</span>
-                <span class="status-ok">bundled</span>
-            </div>
-            <p style="margin-top: 10px; font-size: 12px;">
-                If either API says <em>Flags Required</em>, enable these in Desktop Chrome and relaunch:
-            </p>
-            <div class="flag-item">
-                <code>chrome://flags/#optimization-guide-on-device-model</code>
-                <button class="btn-copy" data-copy="chrome://flags/#optimization-guide-on-device-model">Copy</button>
-            </div>
-            <div class="flag-item">
-                <code>chrome://flags/#prompt-api-for-gemini-nano</code>
-                <button class="btn-copy" data-copy="chrome://flags/#prompt-api-for-gemini-nano">Copy</button>
-            </div>
-            <div class="flag-item">
-                <code>chrome://flags/#summarization-api-for-gemini-nano</code>
-                <button class="btn-copy" data-copy="chrome://flags/#summarization-api-for-gemini-nano">Copy</button>
-            </div>
-        </article>
+      <article
+        class="leaf-card"
+        data-leaf="runtime"
+        data-links="install,warmup,briefings"
+        style="--accent: var(--ochre);"
+      >
+        <div class="leaf-port"></div>
+        <div class="leaf-meta">
+          <span class="leaf-tag"><i class="leaf-dot"></i> node:on-device-ai</span>
+          <span class="leaf-links-hint">live browser check</span>
+        </div>
+        <h2>Gemini Nano &amp; WASM Check</h2>
+        <div class="diag-row">
+          <span>Summarizer API</span>
+          <span id="status-summarizer">Checking...</span>
+        </div>
+        <div class="diag-row">
+          <span>Prompt API (Nano)</span>
+          <span id="status-prompt">Checking...</span>
+        </div>
+        <div class="diag-row">
+          <span>MiniLM-L6-v2 Embeddings</span>
+          <span class="status-ok">bundled</span>
+        </div>
+        <p style="margin-top: 10px; font-size: 12px;">
+          If either API says <em>Flags Required</em>, enable these in Desktop Chrome and relaunch:
+        </p>
+        <div class="flag-item">
+          <code>chrome://flags/#optimization-guide-on-device-model</code>
+          <button class="btn-copy" data-copy="chrome://flags/#optimization-guide-on-device-model">Copy</button>
+        </div>
+        <div class="flag-item">
+          <code>chrome://flags/#prompt-api-for-gemini-nano</code>
+          <button class="btn-copy" data-copy="chrome://flags/#prompt-api-for-gemini-nano">Copy</button>
+        </div>
+        <div class="flag-item">
+          <code>chrome://flags/#summarization-api-for-gemini-nano</code>
+          <button class="btn-copy" data-copy="chrome://flags/#summarization-api-for-gemini-nano">Copy</button>
+        </div>
+      </article>
     </div>
 
-    <!-- Branch 2: Interactive Feature Leaves -->
     <div class="cluster-label">
-        <span>branch // 02 &mdash; reading &amp; synthesis workflow (hover any leaf to trace links)</span>
+      <span>branch // 02 &mdash; reading &amp; synthesis workflow (hover any leaf to trace links)</span>
     </div>
 
     <div class="leaf-grid">
-        <!-- Leaf 3: Step 1 -->
-        <article
-                class="leaf-card"
-                data-leaf="warmup"
-                data-links="runtime,capture"
-                style="--accent: var(--ochre);"
-        >
-            <div class="leaf-port"></div>
-            <div class="leaf-meta">
-                <span class="leaf-tag"><i class="leaf-dot"></i> leaf:01 &middot; warmup</span>
-                <span class="leaf-links-hint">one-time</span>
-            </div>
-            <h2>Cache Offline Model Weights</h2>
-            <p>
-                Pin <strong>Synapse-Read</strong> to your toolbar and open the Side Panel. Click <span class="chip">Download AI</span> on the setup banner once so Gemini Nano caches locally on disk—every briefing after runs completely offline.
-            </p>
-        </article>
+      <article
+        class="leaf-card"
+        data-leaf="warmup"
+        data-links="runtime,capture"
+        style="--accent: var(--ochre);"
+      >
+        <div class="leaf-port"></div>
+        <div class="leaf-meta">
+          <span class="leaf-tag"><i class="leaf-dot"></i> leaf:01 &middot; warmup</span>
+          <span class="leaf-links-hint">one-time</span>
+        </div>
+        <h2>Cache Offline Model Weights</h2>
+        <p>
+          Pin <strong>Synapse-Read</strong> to your toolbar and open the Side Panel. Click <span class="chip">Download AI</span> on the setup banner once so Gemini Nano caches locally on disk—every briefing after runs completely offline.
+        </p>
+      </article>
 
-        <!-- Leaf 4: Step 2 -->
-        <article
-                class="leaf-card"
-                data-leaf="capture"
-                data-links="warmup,search,briefings"
-                style="--accent: var(--terracotta);"
-        >
-            <div class="leaf-port"></div>
-            <div class="leaf-meta">
-                <span class="leaf-tag"><i class="leaf-dot"></i> leaf:02 &middot; ingest</span>
-                <span class="leaf-links-hint">readability + sync</span>
-            </div>
-            <h2>Capture, Sync &amp; Hydrate</h2>
-            <ul class="leaf-list">
-                <li><span class="chip">Save Content</span> extracts clean prose and auto-generates a TL;DR digest + 384-dim vector.</li>
-                <li><span class="chip">Sync List</span> pulls links from Chrome&rsquo;s Reading List across devices.</li>
-                <li><span class="chip">Fetch &amp; Digest</span> hydrates link-only cards in the background without opening tabs.</li>
-            </ul>
-        </article>
+      <article
+        class="leaf-card"
+        data-leaf="capture"
+        data-links="warmup,search,briefings,export"
+        style="--accent: var(--terracotta);"
+      >
+        <div class="leaf-port"></div>
+        <div class="leaf-meta">
+          <span class="leaf-tag"><i class="leaf-dot"></i> leaf:02 &middot; ingest &amp; annotate</span>
+          <span class="leaf-links-hint">readability + notes</span>
+        </div>
+        <h2>Capture, Sync &amp; Annotate</h2>
+        <ul class="leaf-list">
+          <li><span class="chip">Save Content</span> extracts clean prose and auto-generates a TL;DR digest + 384-dim vector.</li>
+          <li><span class="chip">Sync List</span> &amp; <span class="chip">Fetch &amp; Digest</span> import and hydrate Chrome Reading List links in the background.</li>
+          <li><span class="chip">+ Note</span> attaches searchable personal annotations to any saved post or bookmark.</li>
+        </ul>
+      </article>
 
-        <!-- Leaf 5: Step 3 -->
-        <article
-                class="leaf-card"
-                data-leaf="search"
-                data-links="capture,briefings,reflect"
-                style="--accent: var(--sage);"
-        >
-            <div class="leaf-port"></div>
-            <div class="leaf-meta">
-                <span class="leaf-tag"><i class="leaf-dot"></i> leaf:03 &middot; graph-recall</span>
-                <span class="leaf-links-hint">384-dim cosine</span>
-            </div>
-            <h2>Trace Related Synapses</h2>
-            <ul class="leaf-list">
-                <li>Click <span class="chip">Related</span> on any card to reveal conceptually similar reads with similarity percentages.</li>
-                <li>Query the <strong>Semantic Search</strong> bar across <em>both</em> articles and your briefing reflections, then click <span class="chip">Open</span> to jump straight in.</li>
-            </ul>
-        </article>
+      <article
+        class="leaf-card"
+        data-leaf="search"
+        data-links="capture,briefings,reflect"
+        style="--accent: var(--sage);"
+      >
+        <div class="leaf-port"></div>
+        <div class="leaf-meta">
+          <span class="leaf-tag"><i class="leaf-dot"></i> leaf:03 &middot; graph-recall</span>
+          <span class="leaf-links-hint">10,000+ post scale</span>
+        </div>
+        <h2>Trace Related Synapses</h2>
+        <ul class="leaf-list">
+          <li>Click <span class="chip">Related</span> on any card to surface conceptually similar reads—weighted by both digests and your attached post notes.</li>
+          <li>Query <strong>Semantic Search</strong> across posts, post notes, and briefing reflections, or click <span class="chip">Open</span> on matching notes.</li>
+        </ul>
+      </article>
 
-        <!-- Leaf 6: Step 4 -->
-        <article
-                class="leaf-card"
-                data-leaf="briefings"
-                data-links="capture,search,reflect"
-                style="--accent: var(--periwinkle);"
-        >
-            <div class="leaf-port"></div>
-            <div class="leaf-meta">
-                <span class="leaf-tag"><i class="leaf-dot"></i> leaf:04 &middot; synthesize</span>
-                <span class="leaf-links-hint">7D / 14D / 30D</span>
-            </div>
-            <h2>Generate Date-Range Briefings</h2>
-            <p>
-                Pick <span class="chip">7D</span>, <span class="chip">14D</span>, <span class="chip">30D</span>, or a custom range and click <span class="chip">Generate Briefing</span>. Nano distills top takeaways with inline citations and surfaces a <strong>From Your Archive</strong> bridge to older related reads.
-            </p>
-        </article>
+      <article
+        class="leaf-card"
+        data-leaf="briefings"
+        data-links="capture,search,reflect"
+        style="--accent: var(--periwinkle);"
+      >
+        <div class="leaf-port"></div>
+        <div class="leaf-meta">
+          <span class="leaf-tag"><i class="leaf-dot"></i> leaf:04 &middot; synthesize</span>
+          <span class="leaf-links-hint">7D / 14D / 30D</span>
+        </div>
+        <h2>Generate Date-Range Briefings</h2>
+        <p>
+          Pick <span class="chip">7D</span>, <span class="chip">14D</span>, <span class="chip">30D</span>, or a custom range and click <span class="chip">Generate Briefing</span>. Nano distills top takeaways with inline citations and surfaces a <strong>From Your Archive</strong> bridge to older related reads.
+        </p>
+      </article>
 
-        <!-- Leaf 7: Step 5 -->
-        <article
-                class="leaf-card"
-                data-leaf="reflect"
-                data-links="briefings,search,export"
-                style="--accent: var(--periwinkle);"
-        >
-            <div class="leaf-port"></div>
-            <div class="leaf-meta">
-                <span class="leaf-tag"><i class="leaf-dot"></i> leaf:05 &middot; voice &amp; notes</span>
-                <span class="leaf-links-hint">1,000-word limit</span>
-            </div>
-            <h2>Listen &amp; Write Reflections</h2>
-            <ul class="leaf-list">
-                <li>Click <span class="chip">Listen</span> and pick a natural system voice for offline audio narration.</li>
-                <li>Jot up to <strong>1,000 words</strong> in <strong>My Notes &amp; Reflections</strong>—notes auto-save and auto-index into your semantic search graph.</li>
-            </ul>
-        </article>
+      <article
+        class="leaf-card"
+        data-leaf="reflect"
+        data-links="briefings,search,export"
+        style="--accent: var(--periwinkle);"
+      >
+        <div class="leaf-port"></div>
+        <div class="leaf-meta">
+          <span class="leaf-tag"><i class="leaf-dot"></i> leaf:05 &middot; voice &amp; notes</span>
+          <span class="leaf-links-hint">1,000-word limit</span>
+        </div>
+        <h2>Listen &amp; Write Reflections</h2>
+        <ul class="leaf-list">
+          <li>Click <span class="chip">Listen</span> and pick a natural system voice for offline audio narration.</li>
+          <li>Jot up to <strong>1,000 words</strong> in <strong>My Notes &amp; Reflections</strong>—notes auto-save and auto-index into your semantic search graph.</li>
+        </ul>
+      </article>
 
-        <!-- Leaf 8: Step 6 -->
-        <article
-                class="leaf-card"
-                data-leaf="export"
-                data-links="reflect,capture"
-                style="--accent: var(--plum);"
-        >
-            <div class="leaf-port"></div>
-            <div class="leaf-meta">
-                <span class="leaf-tag"><i class="leaf-dot"></i> leaf:06 &middot; portability</span>
-                <span class="leaf-links-hint">.md + .json</span>
-            </div>
-            <h2>Export Markdown &amp; Backup</h2>
-            <ul class="leaf-list">
-                <li><span class="chip">Export .md</span> saves a single briefing + reflections with YAML frontmatter for Obsidian or Notion.</li>
-                <li><span class="chip">Backup</span> &amp; <span class="chip">Restore</span> export or merge your full IndexedDB archive (including embeddings) as <code>.json</code>.</li>
-            </ul>
-        </article>
+      <article
+        class="leaf-card"
+        data-leaf="export"
+        data-links="reflect,capture"
+        style="--accent: var(--plum);"
+      >
+        <div class="leaf-port"></div>
+        <div class="leaf-meta">
+          <span class="leaf-tag"><i class="leaf-dot"></i> leaf:06 &middot; portability</span>
+          <span class="leaf-links-hint">.md + merge .json</span>
+        </div>
+        <h2>Export Markdown &amp; Merge Backups</h2>
+        <ul class="leaf-list">
+          <li><span class="chip">Export .md</span> exports the briefing, your reflections, <em>and</em> all saved posts with their attached notes for that date window.</li>
+          <li><span class="chip">Backup</span> &amp; <span class="chip">Restore</span> seamlessly merge <code>.json</code> archives—deduplicating URLs, keeping hydrated text, and combining distinct notes with <code>---</code>.</li>
+        </ul>
+      </article>
     </div>
-</div>
+  </div>
 
-<script>
-    // --- Copy Buttons ---
+  <script>
     document.querySelectorAll('.btn-copy').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-            const text = btn.getAttribute('data-copy');
-            await navigator.clipboard.writeText(text);
-            const orig = btn.textContent;
-            btn.textContent = 'Copied';
-            setTimeout(() => { btn.textContent = orig; }, 1400);
-        });
+      btn.addEventListener('click', async () => {
+        const text = btn.getAttribute('data-copy');
+        await navigator.clipboard.writeText(text);
+        const orig = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = orig; }, 1400);
+      });
     });
 
-    // --- Drag & Drop Detector ---
     const dropZone = document.getElementById('drop-zone');
     ['dragover', 'drop'].forEach((evt) => {
-        window.addEventListener(evt, (e) => e.preventDefault());
+      window.addEventListener(evt, (e) => e.preventDefault());
     });
     dropZone.addEventListener('dragover', () => dropZone.classList.add('dragover'));
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', (e) => {
-        dropZone.classList.remove('dragover');
-        const name = e.dataTransfer?.files?.[0]?.name || 'your folder';
-        dropZone.innerHTML = `Detected <strong>${name}</strong> — drop it onto your <code>chrome://extensions</code> tab (with Developer mode ON) to install.`;
+      dropZone.classList.remove('dragover');
+      const name = e.dataTransfer?.files?.[0]?.name || 'your folder';
+      dropZone.innerHTML = `Detected <strong>${name}</strong> — drop it onto your <code>chrome://extensions</code> tab (with Developer mode ON) to install.`;
     });
 
-    // --- Live Gemini Nano Availability Check ---
     async function checkAI() {
-        const sumEl = document.getElementById('status-summarizer');
-        const prmEl = document.getElementById('status-prompt');
+      const sumEl = document.getElementById('status-summarizer');
+      const prmEl = document.getElementById('status-prompt');
 
-        try {
-            if ('Summarizer' in self) {
-                const avail = await self.Summarizer.availability();
-                sumEl.textContent = avail;
-                sumEl.className = avail === 'unavailable' ? 'status-warn' : 'status-ok';
-            } else {
-                sumEl.textContent = 'flags required';
-                sumEl.className = 'status-warn';
-            }
-        } catch {
-            sumEl.textContent = 'flags required';
-            sumEl.className = 'status-warn';
+      try {
+        if ('Summarizer' in self) {
+          const avail = await self.Summarizer.availability();
+          sumEl.textContent = avail;
+          sumEl.className = avail === 'unavailable' ? 'status-warn' : 'status-ok';
+        } else {
+          sumEl.textContent = 'flags required';
+          sumEl.className = 'status-warn';
         }
+      } catch {
+        sumEl.textContent = 'flags required';
+        sumEl.className = 'status-warn';
+      }
 
-        try {
-            if ('LanguageModel' in self) {
-                const avail = await self.LanguageModel.availability({
-                    expectedOutputs: [{ type: 'text', languages: ['en'] }],
-                });
-                prmEl.textContent = avail;
-                prmEl.className = avail === 'unavailable' ? 'status-warn' : 'status-ok';
-            } else {
-                prmEl.textContent = 'flags required';
-                prmEl.className = 'status-warn';
-            }
-        } catch {
-            prmEl.textContent = 'flags required';
-            prmEl.className = 'status-warn';
+      try {
+        if ('LanguageModel' in self) {
+          const avail = await self.LanguageModel.availability({
+            expectedOutputs: [{ type: 'text', languages: ['en'] }],
+          });
+          prmEl.textContent = avail;
+          prmEl.className = avail === 'unavailable' ? 'status-warn' : 'status-ok';
+        } else {
+          prmEl.textContent = 'flags required';
+          prmEl.className = 'status-warn';
         }
+      } catch {
+        prmEl.textContent = 'flags required';
+        prmEl.className = 'status-warn';
+      }
     }
     checkAI();
 
-    // --- Dynamic SVG Knowledge Graph Edge Renderer ---
     const wrapper = document.getElementById('graph-wrapper');
     const svg = document.getElementById('graph-svg');
     const hubPort = document.getElementById('hub-port');
     const leafCards = Array.from(document.querySelectorAll('.leaf-card'));
 
     function getCenter(el, rootRect) {
-        const r = el.getBoundingClientRect();
-        return {
-            x: r.left - rootRect.left + r.width / 2,
-            y: r.top - rootRect.top + r.height / 2,
-        };
+      const r = el.getBoundingClientRect();
+      return {
+        x: r.left - rootRect.left + r.width / 2,
+        y: r.top - rootRect.top + r.height / 2,
+      };
     }
 
     function drawGraphEdges() {
-        const rootRect = wrapper.getBoundingClientRect();
-        svg.setAttribute('viewBox', `0 0 ${rootRect.width} ${rootRect.height}`);
-        svg.innerHTML = '';
+      const rootRect = wrapper.getBoundingClientRect();
+      svg.setAttribute('viewBox', `0 0 ${rootRect.width} ${rootRect.height}`);
+      svg.innerHTML = '';
 
-        const hubPt = getCenter(hubPort, rootRect);
-        const isMobile = window.innerWidth <= 760;
-        const spineX = isMobile ? 16 : rootRect.width / 2;
+      const hubPt = getCenter(hubPort, rootRect);
+      const isMobile = window.innerWidth <= 760;
+      const spineX = isMobile ? 16 : rootRect.width / 2;
 
-        const portMap = {};
-        const accentMap = {};
+      const portMap = {};
+      const accentMap = {};
 
-        leafCards.forEach((card) => {
-            const id = card.getAttribute('data-leaf');
-            const port = card.querySelector('.leaf-port');
-            portMap[id] = getCenter(port, rootRect);
-            accentMap[id] = getComputedStyle(card).getPropertyValue('--accent').trim();
+      leafCards.forEach((card) => {
+        const id = card.getAttribute('data-leaf');
+        const port = card.querySelector('.leaf-port');
+        portMap[id] = getCenter(port, rootRect);
+        accentMap[id] = getComputedStyle(card).getPropertyValue('--accent').trim();
+      });
+
+      let lowestY = hubPt.y;
+      leafCards.forEach((card) => {
+        const id = card.getAttribute('data-leaf');
+        const pt = portMap[id];
+        if (pt.y > lowestY) lowestY = pt.y;
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const midX = (spineX + pt.x) / 2;
+        const d = `M ${spineX} ${pt.y - 26} C ${spineX} ${pt.y}, ${midX} ${pt.y}, ${pt.x} ${pt.y}`;
+        path.setAttribute('d', d);
+        path.setAttribute('class', 'edge-primary');
+        path.setAttribute('data-from', 'hub');
+        path.setAttribute('data-to', id);
+        path.setAttribute('data-accent', accentMap[id]);
+        svg.appendChild(path);
+
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', spineX);
+        dot.setAttribute('cy', pt.y - 26);
+        dot.setAttribute('r', '3.5');
+        dot.setAttribute('fill', '#1E1D1A');
+        dot.setAttribute('fill-opacity', '0.35');
+        svg.appendChild(dot);
+      });
+
+      const spine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const spineD = isMobile
+        ? `M ${hubPt.x} ${hubPt.y} C ${hubPt.x} ${hubPt.y + 30}, ${spineX} ${hubPt.y + 10}, ${spineX} ${hubPt.y + 48} L ${spineX} ${lowestY - 26}`
+        : `M ${hubPt.x} ${hubPt.y} L ${spineX} ${lowestY - 26}`;
+      spine.setAttribute('d', spineD);
+      spine.setAttribute('class', 'edge-primary');
+      svg.appendChild(spine);
+
+      const drawnPairs = new Set();
+      leafCards.forEach((card) => {
+        const fromId = card.getAttribute('data-leaf');
+        const links = (card.getAttribute('data-links') || '').split(',').filter(Boolean);
+        const p1 = portMap[fromId];
+
+        links.forEach((toId) => {
+          const pairKey = [fromId, toId].sort().join('--');
+          if (drawnPairs.has(pairKey) || !portMap[toId]) return;
+          drawnPairs.add(pairKey);
+
+          const p2 = portMap[toId];
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          const ctrlX = (p1.x + p2.x) / 2 + (isMobile ? 28 : 0);
+          const ctrlY = (p1.y + p2.y) / 2;
+          const d = `M ${p1.x} ${p1.y} Q ${ctrlX} ${ctrlY}, ${p2.x} ${p2.y}`;
+          path.setAttribute('d', d);
+          path.setAttribute('class', 'edge-semantic');
+          path.setAttribute('data-from', fromId);
+          path.setAttribute('data-to', toId);
+          path.setAttribute('data-accent', accentMap[fromId]);
+          svg.appendChild(path);
         });
-
-        // 1. Primary Trunk & Branch Edges from Hub -> Spine -> Each Leaf
-        let lowestY = hubPt.y;
-        leafCards.forEach((card) => {
-            const id = card.getAttribute('data-leaf');
-            const pt = portMap[id];
-            if (pt.y > lowestY) lowestY = pt.y;
-
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            const midX = (spineX + pt.x) / 2;
-            const d = `M ${spineX} ${pt.y - 26} C ${spineX} ${pt.y}, ${midX} ${pt.y}, ${pt.x} ${pt.y}`;
-            path.setAttribute('d', d);
-            path.setAttribute('class', 'edge-primary');
-            path.setAttribute('data-from', 'hub');
-            path.setAttribute('data-to', id);
-            path.setAttribute('data-accent', accentMap[id]);
-            svg.appendChild(path);
-
-            // Spine junction node
-            const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            dot.setAttribute('cx', spineX);
-            dot.setAttribute('cy', pt.y - 26);
-            dot.setAttribute('r', '3.5');
-            dot.setAttribute('fill', '#1E1D1A');
-            dot.setAttribute('fill-opacity', '0.35');
-            svg.appendChild(dot);
-        });
-
-        // Central vertical spine connecting Hub to lowest junction
-        const spine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const spineD = isMobile
-            ? `M ${hubPt.x} ${hubPt.y} C ${hubPt.x} ${hubPt.y + 30}, ${spineX} ${hubPt.y + 10}, ${spineX} ${hubPt.y + 48} L ${spineX} ${lowestY - 26}`
-            : `M ${hubPt.x} ${hubPt.y} L ${spineX} ${lowestY - 26}`;
-        spine.setAttribute('d', spineD);
-        spine.setAttribute('class', 'edge-primary');
-        svg.appendChild(spine);
-
-        // 2. Semantic Cross-Edges between related leaves
-        const drawnPairs = new Set();
-        leafCards.forEach((card) => {
-            const fromId = card.getAttribute('data-leaf');
-            const links = (card.getAttribute('data-links') || '').split(',').filter(Boolean);
-            const p1 = portMap[fromId];
-
-            links.forEach((toId) => {
-                const pairKey = [fromId, toId].sort().join('--');
-                if (drawnPairs.has(pairKey) || !portMap[toId]) return;
-                drawnPairs.add(pairKey);
-
-                const p2 = portMap[toId];
-                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                const ctrlX = (p1.x + p2.x) / 2 + (isMobile ? 28 : 0);
-                const ctrlY = (p1.y + p2.y) / 2;
-                const d = `M ${p1.x} ${p1.y} Q ${ctrlX} ${ctrlY}, ${p2.x} ${p2.y}`;
-                path.setAttribute('d', d);
-                path.setAttribute('class', 'edge-semantic');
-                path.setAttribute('data-from', fromId);
-                path.setAttribute('data-to', toId);
-                path.setAttribute('data-accent', accentMap[fromId]);
-                svg.appendChild(path);
-            });
-        });
+      });
     }
 
-    // --- Interactive Leaf Focus & Edge Highlighting ---
     function highlightLeaf(activeId) {
-        const allEdges = svg.querySelectorAll('path');
-        if (!activeId) {
-            leafCards.forEach((c) => c.classList.remove('is-focused', 'is-connected', 'is-dimmed'));
-            allEdges.forEach((e) => {
-                e.classList.remove('active');
-                e.style.stroke = '';
-            });
-            return;
-        }
-
-        const activeCard = leafCards.find((c) => c.getAttribute('data-leaf') === activeId);
-        const neighbors = new Set(
-            (activeCard?.getAttribute('data-links') || '').split(',').filter(Boolean)
-        );
-        const activeAccent = getComputedStyle(activeCard).getPropertyValue('--accent').trim();
-
-        leafCards.forEach((c) => {
-            const id = c.getAttribute('data-leaf');
-            c.classList.remove('is-focused', 'is-connected', 'is-dimmed');
-            if (id === activeId) c.classList.add('is-focused');
-            else if (neighbors.has(id)) c.classList.add('is-connected');
-            else c.classList.add('is-dimmed');
+      const allEdges = svg.querySelectorAll('path');
+      if (!activeId) {
+        leafCards.forEach((c) => c.classList.remove('is-focused', 'is-connected', 'is-dimmed'));
+        allEdges.forEach((e) => {
+          e.classList.remove('active');
+          e.style.stroke = '';
         });
+        return;
+      }
 
-        allEdges.forEach((edge) => {
-            const from = edge.getAttribute('data-from');
-            const to = edge.getAttribute('data-to');
-            const touches = from === activeId || to === activeId;
-            edge.classList.toggle('active', touches);
-            edge.style.stroke = touches ? activeAccent : '';
-        });
+      const activeCard = leafCards.find((c) => c.getAttribute('data-leaf') === activeId);
+      const neighbors = new Set(
+        (activeCard?.getAttribute('data-links') || '').split(',').filter(Boolean)
+      );
+      const activeAccent = getComputedStyle(activeCard).getPropertyValue('--accent').trim();
+
+      leafCards.forEach((c) => {
+        const id = c.getAttribute('data-leaf');
+        c.classList.remove('is-focused', 'is-connected', 'is-dimmed');
+        if (id === activeId) c.classList.add('is-focused');
+        else if (neighbors.has(id)) c.classList.add('is-connected');
+        else c.classList.add('is-dimmed');
+      });
+
+      allEdges.forEach((edge) => {
+        const from = edge.getAttribute('data-from');
+        const to = edge.getAttribute('data-to');
+        const touches = from === activeId || to === activeId;
+        edge.classList.toggle('active', touches);
+        edge.style.stroke = touches ? activeAccent : '';
+      });
     }
 
     leafCards.forEach((card) => {
-        const id = card.getAttribute('data-leaf');
-        card.addEventListener('mouseenter', () => highlightLeaf(id));
-        card.addEventListener('mouseleave', () => highlightLeaf(null));
-        card.addEventListener('click', () => {
-            const already = card.classList.contains('is-focused');
-            highlightLeaf(already ? null : id);
-        });
+      const id = card.getAttribute('data-leaf');
+      card.addEventListener('mouseenter', () => highlightLeaf(id));
+      card.addEventListener('mouseleave', () => highlightLeaf(null));
+      card.addEventListener('click', () => {
+        const already = card.classList.contains('is-focused');
+        highlightLeaf(already ? null : id);
+      });
     });
 
     window.addEventListener('resize', drawGraphEdges);
     if ('ResizeObserver' in window) {
-        new ResizeObserver(drawGraphEdges).observe(wrapper);
+      new ResizeObserver(drawGraphEdges).observe(wrapper);
     }
     drawGraphEdges();
-</script>
+  </script>
 </body>
 </html>

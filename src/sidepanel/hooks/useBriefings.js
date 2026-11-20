@@ -1,280 +1,331 @@
 import { useEffect, useRef, useState } from 'react';
-import { db } from '../../db.js';
-import { generateBriefing, buildBriefingPrompt } from '../../ai/nano.js';
-import { generateEmbedding, findArchiveConnections } from '../../ai/embeddings.js';
-import {
-    MAX_NOTE_WORDS,
-    formatDateInput,
-    getDateDaysAgo,
-    countWords,
-    buildBriefingEmbedText,
-} from '../utils/formatters.js';
+import { db, getArticlesInDateRange, loadArticleMetadataList } from '../../db.js';
+import { synthesizeBriefing, buildBriefingPrompt } from '../../ai/nano.js';
+import { generateEmbedding, cosineSimilarity } from '../../ai/embeddings.js';
+import { formatDateInput, truncateToMaxWords } from '../utils/formatters.js';
+
+function averageVectors(vectors) {
+  if (!vectors.length) return null;
+  const dim = vectors[0].length;
+  const sum = new Array(dim).fill(0);
+  for (const vec of vectors) {
+    for (let i = 0; i < dim; i++) sum[i] += vec[i];
+  }
+  const norm = Math.sqrt(sum.reduce((acc, v) => acc + v * v, 0)) || 1;
+  return sum.map((v) => v / norm);
+}
 
 export function useBriefings({
-                                 setStatusMsg,
-                                 isGeneratingRef,
-                                 ensureAllEmbeddings,
-                                 loadArticles,
-                                 onBeforeBriefingChange,
-                             }) {
-    const [preset, setPreset] = useState('7D');
-    const [startDate, setStartDate] = useState(() => getDateDaysAgo(7));
-    const [endDate, setEndDate] = useState(() => formatDateInput(new Date()));
+  setStatusMsg,
+  isGeneratingRef,
+  ensureAllEmbeddings,
+  loadArticles,
+  onBeforeBriefingChange,
+}) {
+  const [preset, setPreset] = useState('7D');
+  const [startDate, setStartDate] = useState(() =>
+    formatDateInput(new Date(Date.now() - 7 * 86400000))
+  );
+  const [endDate, setEndDate] = useState(() => formatDateInput(new Date()));
 
-    const [briefings, setBriefings] = useState([]);
-    const [activeBriefingId, setActiveBriefingId] = useState(null);
-    const [briefing, setBriefing] = useState('');
-    const [userNotes, setUserNotes] = useState('');
-    const [notesStatus, setNotesStatus] = useState('');
-    const [isGenerating, setIsGenerating] = useState(false);
+  const [briefings, setBriefings] = useState([]);
+  const [activeBriefingId, setActiveBriefingId] = useState(null);
+  const [briefing, setBriefing] = useState('');
+  const [userNotes, setUserNotes] = useState('');
+  const [notesStatus, setNotesStatus] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
-    const saveTimerRef = useRef(null);
+  const saveTimerRef = useRef(null);
+  const latestNotesRef = useRef({ id: null, text: '' });
 
-    async function loadBriefings(selectId = null) {
-        if (!db.briefings) return;
-        const all = await db.briefings.orderBy('createdAt').reverse().toArray();
-        setBriefings(all);
+  async function loadBriefings(selectLatest = false) {
+    const all = await db.briefings.orderBy('createdAt').reverse().toArray();
+    setBriefings(all);
+    if (all.length > 0 && (selectLatest || !activeBriefingId)) {
+      const target = all[0];
+      setActiveBriefingId(target.id);
+      setBriefing(target.summaryMarkdown || '');
+      setUserNotes(target.userNotes || '');
+    }
+    return all;
+  }
 
-        const target = selectId ? all.find((b) => b.id === selectId) : all[0];
-        if (target) {
-            setActiveBriefingId(target.id);
-            setBriefing(target.summaryMarkdown || '');
-            setUserNotes(target.userNotes || '');
-        }
+  useEffect(() => {
+    loadBriefings(true);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, []);
+
+  function applyPreset(label, days) {
+    setPreset(label);
+    setEndDate(formatDateInput(new Date()));
+    setStartDate(formatDateInput(new Date(Date.now() - days * 86400000)));
+  }
+
+  function updateCustomDate(which, value) {
+    setPreset('CUSTOM');
+    if (which === 'start') setStartDate(value);
+    else setEndDate(value);
+  }
+
+  async function persistNotesNow(id, text, summaryMarkdown) {
+    if (!id) return;
+    setNotesStatus('Saving...');
+    try {
+      const embedSource = [summaryMarkdown, text].filter(Boolean).join('\n\n');
+      const embedding = embedSource ? await generateEmbedding(embedSource) : null;
+      await db.briefings.update(id, { userNotes: text, embedding });
+      setBriefings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, userNotes: text, embedding } : b))
+      );
+      setNotesStatus('Saved');
+    } catch (err) {
+      console.error('Failed to save briefing notes:', err);
+      await db.briefings.update(id, { userNotes: text });
+      setNotesStatus('Saved');
+    }
+  }
+
+  function handleNotesChange(rawText) {
+    const clamped = truncateToMaxWords(rawText);
+    setUserNotes(clamped);
+    setNotesStatus('Unsaved...');
+    latestNotesRef.current = { id: activeBriefingId, text: clamped };
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      persistNotesNow(activeBriefingId, clamped, briefing);
+    }, 650);
+  }
+
+  async function flushNotes() {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const { id, text } = latestNotesRef.current;
+    if (id && id === activeBriefingId) {
+      await persistNotesNow(id, text, briefing);
+    }
+  }
+
+  function openBriefing(target) {
+    if (!target) return;
+    onBeforeBriefingChange?.();
+    setActiveBriefingId(target.id);
+    setBriefing(target.summaryMarkdown || '');
+    setUserNotes(target.userNotes || '');
+    setNotesStatus('');
+    latestNotesRef.current = { id: target.id, text: target.userNotes || '' };
+  }
+
+  function selectBriefingById(idStr) {
+    const target = briefings.find((b) => String(b.id) === String(idStr));
+    openBriefing(target);
+  }
+
+  async function buildWindowArticlesWithArchiveLinks() {
+    const windowArticles = await getArticlesInDateRange(startDate, endDate);
+    const enriched = windowArticles.map((a) => ({
+      ...a,
+      digest: [
+        a.digest || a.content?.slice(0, 600) || '',
+        a.userNotes ? `User Note: ${a.userNotes}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    }));
+
+    const allMeta = await loadArticleMetadataList();
+    await ensureAllEmbeddings(allMeta);
+    const refreshedMeta = await loadArticleMetadataList();
+
+    const windowIds = new Set(windowArticles.map((a) => a.id));
+    const windowVectors = refreshedMeta
+      .filter((a) => windowIds.has(a.id) && Array.isArray(a.embedding))
+      .map((a) => a.embedding);
+
+    const centroid = averageVectors(windowVectors);
+    let archiveConnections = [];
+    if (centroid) {
+      archiveConnections = refreshedMeta
+        .filter((a) => !windowIds.has(a.id) && Array.isArray(a.embedding))
+        .map((a) => ({
+          ...a,
+          score: cosineSimilarity(centroid, a.embedding),
+        }))
+        .filter((a) => a.score > 0.3)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
     }
 
-    useEffect(() => {
-        loadBriefings();
-        return () => {
-            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        };
-    }, []);
+    return { windowArticles, enriched, archiveConnections };
+  }
 
-    function applyPreset(label, days) {
-        setPreset(label);
-        setStartDate(getDateDaysAgo(days));
-        setEndDate(formatDateInput(new Date()));
-    }
+  async function generateNewBriefing() {
+    if (isGenerating) return;
+    isGeneratingRef.current = true;
+    setIsGenerating(true);
+    onBeforeBriefingChange?.();
 
-    function updateCustomDate(bound, value) {
-        setPreset('custom');
-        if (bound === 'start') setStartDate(value);
-        else setEndDate(value);
-    }
+    try {
+      setStatusMsg('Gathering articles and semantic connections...');
+      const { windowArticles, enriched, archiveConnections } =
+        await buildWindowArticlesWithArchiveLinks();
 
-    async function getArticlesInWindow() {
-        const startMs = new Date(`${startDate}T00:00:00`).getTime();
-        const endMs = new Date(`${endDate}T23:59:59.999`).getTime();
-        return db.articles.where('savedAt').between(startMs, endMs, true, true).toArray();
-    }
+      if (windowArticles.length === 0) {
+        setStatusMsg(`No saved articles found between ${startDate} and ${endDate}.`);
+        return;
+      }
 
-    async function ensureBriefingEmbeddings(allBriefings) {
-        const missing = allBriefings.filter(
-            (b) => !Array.isArray(b.embedding) && (b.userNotes?.trim() || b.summaryMarkdown?.trim())
-        );
+      setStatusMsg(`Synthesizing ${windowArticles.length} post(s) with Gemini Nano...`);
+      let summaryMarkdown = await synthesizeBriefing(enriched, `${startDate} to ${endDate}`);
 
-        for (let i = 0; i < missing.length; i++) {
-            const b = missing[i];
-            setStatusMsg(`Indexing notes (${i + 1}/${missing.length})...`);
-            const emb = await generateEmbedding(buildBriefingEmbedText(b.userNotes, b.summaryMarkdown));
-            if (emb) {
-                await db.briefings.update(b.id, { embedding: emb });
-                b.embedding = emb;
-            }
-        }
+      if (archiveConnections.length > 0) {
+        const archiveLines = archiveConnections
+          .map(
+            (a) =>
+              `- [${a.title}](${a.url}) *(${Math.round(a.score * 100)}% semantic match${
+                a.userNotes ? ` — Note: ${a.userNotes.slice(0, 90)}` : ''
+              })*`
+          )
+          .join('\n');
+        summaryMarkdown += `\n\n### From Your Archive\n${archiveLines}`;
+      }
 
-        if (missing.length > 0) {
-            await loadBriefings(activeBriefingId);
-        }
-        return allBriefings;
-    }
-
-    async function generateNewBriefing() {
-        onBeforeBriefingChange?.();
-        isGeneratingRef.current = true;
-        setIsGenerating(true);
-        setStatusMsg('Querying articles...');
-
-        try {
-            const windowArticles = await getArticlesInWindow();
-            if (windowArticles.length === 0) {
-                setStatusMsg('No articles saved in this date range.');
-                return;
-            }
-
-            const allArticles = await ensureAllEmbeddings(await db.articles.toArray());
-            const windowIds = new Set(windowArticles.map((a) => a.id));
-            const hydratedWindow = allArticles.filter((a) => windowIds.has(a.id));
-            const archiveMatches = findArchiveConnections(hydratedWindow, allArticles);
-
-            setStatusMsg(
-                archiveMatches.length > 0
-                    ? `Synthesizing ${hydratedWindow.length} article(s) + ${archiveMatches.length} archive match(es)...`
-                    : `Synthesizing ${hydratedWindow.length} article(s) with Gemini Nano...`
-            );
-
-            const summaryMarkdown = await generateBriefing(
-                hydratedWindow,
-                archiveMatches,
-                setStatusMsg,
-                { startDate, endDate }
-            );
-
-            let newId = null;
-            if (db.briefings) {
-                newId = await db.briefings.add({
-                    createdAt: Date.now(),
-                    startDate,
-                    endDate,
-                    articleUrls: hydratedWindow.map((a) => a.url),
-                    summaryMarkdown,
-                    userNotes: '',
-                });
-
-                const initialEmb = await generateEmbedding(buildBriefingEmbedText('', summaryMarkdown));
-                if (initialEmb) {
-                    await db.briefings.update(newId, { embedding: initialEmb });
-                }
-            }
-
-            await Promise.all(
-                hydratedWindow.map((a) => db.articles.update(a.id, { status: 'summarized' }))
-            );
-
-            setBriefing(summaryMarkdown);
-            setUserNotes('');
-            setNotesStatus('');
-            await loadBriefings(newId);
-            await loadArticles();
-            setStatusMsg('Briefing ready.');
-        } catch (err) {
-            console.error(err);
-            setStatusMsg(err.message);
-        } finally {
-            isGeneratingRef.current = false;
-            setIsGenerating(false);
-        }
-    }
-
-    async function copyPromptFallback() {
-        const windowArticles = await getArticlesInWindow();
-        if (windowArticles.length === 0) {
-            setStatusMsg('No articles in this date range to copy.');
-            return;
-        }
-        const allArticles = await db.articles.toArray();
-        const archiveMatches = findArchiveConnections(windowArticles, allArticles);
-        const prompt = buildBriefingPrompt(windowArticles, archiveMatches, {
-            startDate,
-            endDate,
-        });
-        await navigator.clipboard.writeText(prompt);
-        setStatusMsg('Prompt copied! Paste into ChatGPT, Claude, or Gemini.');
-    }
-
-    async function persistNotes(briefingId, text) {
-        if (!briefingId || !db.briefings) return;
-        setNotesStatus('Saving...');
-        const target =
-            briefings.find((b) => b.id === briefingId) || (await db.briefings.get(briefingId));
-        const emb = await generateEmbedding(buildBriefingEmbedText(text, target?.summaryMarkdown));
-
-        const patch = { userNotes: text, updatedAt: Date.now() };
-        if (emb) patch.embedding = emb;
-
-        await db.briefings.update(briefingId, patch);
-        setBriefings((prev) =>
-            prev.map((b) => (b.id === briefingId ? { ...b, ...patch } : b))
-        );
-        setNotesStatus('Saved & indexed');
-    }
-
-    function handleNotesChange(nextText) {
-        if (countWords(nextText) > MAX_NOTE_WORDS) {
-            setNotesStatus(`Limit reached (${MAX_NOTE_WORDS} words max)`);
-            return;
-        }
-
-        setUserNotes(nextText);
-        setNotesStatus('Unsaved...');
-
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = setTimeout(() => {
-            persistNotes(activeBriefingId, nextText);
-        }, 600);
-    }
-
-    function flushNotes() {
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        persistNotes(activeBriefingId, userNotes);
-    }
-
-    function openBriefing(chosen) {
-        if (!chosen) return;
-        onBeforeBriefingChange?.();
-        setActiveBriefingId(chosen.id);
-        setBriefing(chosen.summaryMarkdown || '');
-        setUserNotes(chosen.userNotes || '');
-        setNotesStatus('');
-    }
-
-    function selectBriefingById(id) {
-        const chosen = briefings.find((b) => b.id === Number(id));
-        openBriefing(chosen);
-    }
-
-    function exportMarkdown() {
-        if (!briefing) return;
-        const activeObj = briefings.find((b) => b.id === activeBriefingId);
-        const dateRange = activeObj
-            ? `${activeObj.startDate}_to_${activeObj.endDate}`
-            : formatDateInput(new Date());
-
-        const frontmatter = [
-            '---',
-            `title: "Synapse-Read Briefing (${dateRange.replace('_to_', ' to ')})"`,
-            `exported: ${new Date().toISOString()}`,
-            `source: Synapse-Read`,
-            '---',
-            '',
-        ].join('\n');
-
-        const notesSection = userNotes.trim()
-            ? `\n\n## My Notes & Reflections\n\n${userNotes.trim()}\n`
-            : '';
-
-        const fullMarkdown = `${frontmatter}${briefing.trim()}${notesSection}`;
-        const blob = new Blob([fullMarkdown], { type: 'text/markdown;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `synapse-briefing-${dateRange}.md`;
-        a.click();
-        URL.revokeObjectURL(url);
-        setStatusMsg('Exported Markdown file.');
-    }
-
-    return {
-        preset,
+      const embedding = await generateEmbedding(summaryMarkdown);
+      const newId = await db.briefings.add({
+        createdAt: Date.now(),
         startDate,
         endDate,
-        briefings,
-        activeBriefingId,
-        briefing,
-        userNotes,
-        notesStatus,
-        isGenerating,
-        loadBriefings,
-        ensureBriefingEmbeddings,
-        applyPreset,
-        updateCustomDate,
-        generateNewBriefing,
-        copyPromptFallback,
-        handleNotesChange,
-        flushNotes,
-        openBriefing,
-        selectBriefingById,
-        exportMarkdown,
-    };
+        summaryMarkdown,
+        userNotes: '',
+        embedding,
+      });
+
+      await loadBriefings(false);
+      await loadArticles();
+      setActiveBriefingId(newId);
+      setBriefing(summaryMarkdown);
+      setUserNotes('');
+      setNotesStatus('');
+      latestNotesRef.current = { id: newId, text: '' };
+      setStatusMsg('Briefing ready.');
+    } catch (err) {
+      console.error('Briefing generation error:', err);
+      setStatusMsg('Briefing error: ' + err.message);
+    } finally {
+      isGeneratingRef.current = false;
+      setIsGenerating(false);
+    }
+  }
+
+  async function copyPromptFallback() {
+    const { windowArticles, enriched } = await buildWindowArticlesWithArchiveLinks();
+    if (windowArticles.length === 0) {
+      setStatusMsg(`No saved articles found between ${startDate} and ${endDate}.`);
+      return;
+    }
+    const prompt = buildBriefingPrompt(enriched, `${startDate} to ${endDate}`);
+    await navigator.clipboard.writeText(prompt);
+    setStatusMsg(`Copied synthesis prompt for ${windowArticles.length} post(s) to clipboard.`);
+  }
+
+  async function ensureBriefingEmbeddings() {
+    const all = await db.briefings.toArray();
+    for (const b of all) {
+      const embedSource = [b.summaryMarkdown, b.userNotes].filter(Boolean).join('\n\n');
+      if (!b.embedding && embedSource) {
+        try {
+          const embedding = await generateEmbedding(embedSource);
+          await db.briefings.update(b.id, { embedding });
+        } catch (err) {
+          console.error('Briefing embedding error:', err);
+        }
+      }
+    }
+  }
+
+  async function exportMarkdown() {
+    if (!briefing) return;
+
+    const activeRecord = briefings.find((b) => b.id === activeBriefingId);
+    const winStart = activeRecord?.startDate || startDate;
+    const winEnd = activeRecord?.endDate || endDate;
+    const windowArticles = await getArticlesInDateRange(winStart, winEnd);
+    const annotatedCount = windowArticles.filter((a) => (a.userNotes || '').trim()).length;
+
+    const frontmatter = [
+      '---',
+      `title: "Synapse-Read Briefing (${winStart} to ${winEnd})"`,
+      `date_range: "${winStart} to ${winEnd}"`,
+      `exported_at: "${new Date().toISOString()}"`,
+      `articles_count: ${windowArticles.length}`,
+      `annotated_posts_count: ${annotatedCount}`,
+      '---',
+      '',
+    ].join('\n');
+
+    const sections = [frontmatter, briefing.trim()];
+
+    if (userNotes.trim()) {
+      sections.push(`\n## My Briefing Reflections\n\n${userNotes.trim()}`);
+    }
+
+    if (windowArticles.length > 0) {
+      const postLines = windowArticles.map((art) => {
+        const lines = [`- **[${art.title}](${art.url})** *(${new Date(art.savedAt).toLocaleDateString()})*`];
+        if (art.digest) {
+          lines.push(`  - **Digest:** ${art.digest.trim()}`);
+        }
+        if ((art.userNotes || '').trim()) {
+          const formattedNote = art.userNotes
+            .trim()
+            .split('\n')
+            .map((l) => `  > ${l}`)
+            .join('\n');
+          lines.push(`  > **My Note:**\n${formattedNote}`);
+        }
+        return lines.join('\n');
+      });
+
+      sections.push(
+        `\n## Saved Posts & Attached Notes (${winStart} to ${winEnd})\n\n${postLines.join('\n\n')}`
+      );
+    }
+
+    const mdContent = sections.join('\n') + '\n';
+    const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `synapse-read-briefing-${winStart}-to-${winEnd}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatusMsg('Exported Markdown with post notes.');
+  }
+
+  return {
+    preset,
+    startDate,
+    endDate,
+    briefings,
+    activeBriefingId,
+    briefing,
+    userNotes,
+    notesStatus,
+    isGenerating,
+    loadBriefings,
+    applyPreset,
+    updateCustomDate,
+    generateNewBriefing,
+    copyPromptFallback,
+    handleNotesChange,
+    flushNotes,
+    selectBriefingById,
+    openBriefing,
+    exportMarkdown,
+    ensureBriefingEmbeddings,
+  };
 }
