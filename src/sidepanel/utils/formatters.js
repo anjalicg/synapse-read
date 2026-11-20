@@ -36,3 +36,10 @@ export function prepareSpeechChunks(md) {
         .filter(Boolean)
         .map((line) => (/[.!?]$/.test(line) ? line : `${line}.`));
 }
+export function truncateToMaxWords(text, maxWords = 1000) {
+  if (!text) return '';
+  const matches = [...text.matchAll(/\S+/g)];
+  if (matches.length <= maxWords) return text;
+  const cutoff = matches[maxWords - 1].index + matches[maxWords - 1][0].length;
+  return text.slice(0, cutoff);
+}
