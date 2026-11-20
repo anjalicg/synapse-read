@@ -44,13 +44,6 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
     }
   }
 
-  useEffect(() => {
-    loadArticles();
-    syncReadingList(true);
-    const unsubscribe = subscribeReadingListChanges(() => syncReadingList(true));
-    return () => unsubscribe();
-  }, []);
-
   async function runBackgroundDigest(id, title, content, userNotes = '') {
     try {
       setBackgroundStatus('Generating local TL;DR digest...');
@@ -62,9 +55,49 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
       setBackgroundStatus('Digest & semantic index ready.');
     } catch (err) {
       console.error(err);
+      try {
+        const fallbackText = [title, content.slice(0, 1200), userNotes]
+          .filter(Boolean)
+          .join('\n\n');
+        const embedding = fallbackText ? await generateEmbedding(fallbackText) : null;
+        await db.articles.update(id, {
+          status: 'saved',
+          ...(embedding ? { embedding } : {}),
+        });
+      } catch {
+        await db.articles.update(id, { status: 'saved' });
+      }
+      await loadArticles();
       setBackgroundStatus('Saved article (Nano summary unavailable).');
     }
   }
+
+  async function resumePendingDigests(metadataList) {
+    const pending = metadataList.filter(
+      (item) => item.status === 'digesting' && item.hasContent && !item.digest
+    );
+    if (pending.length === 0) return;
+
+    setBackgroundStatus(`Resuming ${pending.length} interrupted digest(s)...`);
+    for (const item of pending) {
+      const fullRecord = await db.articles.get(item.id);
+      if (fullRecord?.content?.trim()) {
+        await runBackgroundDigest(
+          fullRecord.id,
+          fullRecord.title,
+          fullRecord.content,
+          fullRecord.userNotes || ''
+        );
+      }
+    }
+  }
+
+  useEffect(() => {
+    loadArticles().then((list) => resumePendingDigests(list));
+    syncReadingList(true);
+    const unsubscribe = subscribeReadingListChanges(() => syncReadingList(true));
+    return () => unsubscribe();
+  }, []);
 
   async function ensureAllEmbeddings(articleList) {
     let updated = false;
