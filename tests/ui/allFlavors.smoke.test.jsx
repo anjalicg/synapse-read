@@ -90,9 +90,14 @@ describe('Flavor 2: Vercel Web App on Desktop (1280x800)', () => {
     fireEvent.click(copyButtons[0]);
     expect(navigator.clipboard.writeText).toHaveBeenCalled();
 
-    // Switch to Briefings tab
+    // Runtime AI check should resolve out of "Checking..."
+    await waitFor(() => {
+      expect(screen.queryAllByText('Checking...')).toHaveLength(0);
+    });
+
+    // Switch to Briefings tab and verify Markdown formatting (no raw ## or **)
     fireEvent.click(await screen.findByRole('button', { name: /Briefings \(1\)/i }));
-    expect(await screen.findByText('Weekly Synthesis')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Weekly Synthesis' })).toBeInTheDocument();
   });
 });
 

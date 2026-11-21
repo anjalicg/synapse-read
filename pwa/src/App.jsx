@@ -225,6 +225,44 @@ function AudioControlBar({ player, itemId, text, title }) {
   );
 }
 
+async function runRuntimeCapabilityProbe(rootEl) {
+  if (!rootEl) return;
+  const sumEl = rootEl.querySelector('#status-summarizer') || document.getElementById('status-summarizer');
+  const promptEl = rootEl.querySelector('#status-prompt') || document.getElementById('status-prompt');
+  if (!sumEl && !promptEl) return;
+
+  const formatStatus = (val) => {
+    if (!val || val === 'no' || val === 'unavailable') return 'unavailable';
+    if (val === 'readily' || val === 'available') return 'ready';
+    if (val === 'after-download' || val === 'downloadable' || val === 'downloading') return 'downloadable';
+    return String(val);
+  };
+
+  try {
+    let sumStatus = 'unavailable';
+    if (self.Summarizer?.availability) {
+      sumStatus = formatStatus(await self.Summarizer.availability());
+    } else if (self.ai?.summarizer?.capabilities) {
+      sumStatus = formatStatus((await self.ai.summarizer.capabilities())?.available);
+    }
+    if (sumEl) sumEl.textContent = sumStatus;
+  } catch {
+    if (sumEl) sumEl.textContent = 'unavailable';
+  }
+
+  try {
+    let promptStatus = 'unavailable';
+    if (self.LanguageModel?.availability) {
+      promptStatus = formatStatus(await self.LanguageModel.availability());
+    } else if (self.ai?.languageModel?.capabilities) {
+      promptStatus = formatStatus((await self.ai.languageModel.capabilities())?.available);
+    }
+    if (promptEl) promptEl.textContent = promptStatus;
+  } catch {
+    if (promptEl) promptEl.textContent = 'unavailable';
+  }
+}
+
 export default function App() {
   const [clientId] = useState(
     () => import.meta.env.VITE_GOOGLE_CLIENT_ID || localStorage.getItem(CLIENT_ID_KEY) || DEFAULT_CLIENT_ID
@@ -687,7 +725,7 @@ export default function App() {
                 </div>
               </section>
             ) : LANDING_HTML ? (
-              <div className="landing-embed" onClick={handleLandingClick} dangerouslySetInnerHTML={{ __html: sanitizedLandingHtml }} />
+              <div className="landing-embed" ref={runRuntimeCapabilityProbe} onClick={handleLandingClick} dangerouslySetInnerHTML={{ __html: sanitizedLandingHtml }} />
             ) : null
           ) : tab === 'architecture' ? (
             <ArchitectureDetails onSwitchTab={setTab} />
