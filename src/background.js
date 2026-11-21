@@ -30,6 +30,9 @@ async function enqueuePendingSave(payload) {
 }
 
 chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
+  if (tab?.windowId && chrome.sidePanel?.open) {
+    chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
+  }
   if (info.menuItemId === 'afterword-save-link' && info.linkUrl) {
     await enqueuePendingSave({
       mode: 'link',

@@ -381,13 +381,16 @@ export default function App() {
       ) : (
         <>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button
+            <div className="aw-save-split" style={{ position: 'relative', display: 'flex', flex: 1 }}>
+          <style>{`.aw-save-split .aw-save-pop{display:none}.aw-save-split:hover .aw-save-pop,.aw-save-split:focus-within .aw-save-pop{display:block}`}</style>
+          <button
               onClick={() => articlesHook.saveActiveTab('content')}
               className="sr-btn sr-btn-primary"
               style={{ flex: 1 }}
             >
               + Save Content
             </button>
+          <div className="aw-save-pop" style={{ position: 'absolute', top: '100%', left: 0, right: 0, paddingTop: '4px', zIndex: 30 }}>
             <button
               onClick={() => articlesHook.saveActiveTab('bookmark')}
               className="sr-btn sr-btn-secondary"
@@ -395,6 +398,9 @@ export default function App() {
             >
               Save Link Only
             </button>
+          </div>
+        </div>
+            
           </div>
 
           <BriefingPanel
