@@ -1,5 +1,6 @@
-const MAX_SUMMARY_INPUT_CHARS = 14000;
-const MAX_BRIEFING_PROMPT_CHARS = 12000;
+const MAX_SUMMARY_INPUT_CHARS = 10000;
+const MAX_BRIEFING_PROMPT_CHARS = 7500;
+const PREFILL_SPEED_KEY = 'afterword:nanoPrefillCharsPerSec';
 const SUMMARY_SPEED_KEY = 'afterword:nanoSummaryCharsPerSec';
 const BRIEFING_SPEED_KEY = 'afterword:nanoBriefingCharsPerSec';
 
@@ -135,50 +136,72 @@ export async function warmupNanoModel(onStatus) {
   }
 }
 
-// Runs a live 250ms ETA ticker from t=0 (covering session load + inference) and refines with stream tokens
-async function runTrackedGeneration({
-  expectedChars,
+// Phase 1: Honest elapsed + calibrated prefill estimate while Nano reads input.
+// Phase 2: Live % and ~Xs left only once output tokens start streaming.
+async function runTwoPhaseGeneration({
+  inputChars,
+  expectedOutputChars,
   speedStorageKey,
-  defaultCharsPerSec,
+  defaultOutputCharsPerSec,
   label,
   onProgress,
   execute,
 }) {
-  const savedSpeed = Number(localStorage.getItem(speedStorageKey)) || defaultCharsPerSec;
-  const estTotalSec = Math.max(3, expectedChars / savedSpeed);
+  const savedPrefillSpeed = Number(localStorage.getItem(PREFILL_SPEED_KEY)) || 550;
+  const savedOutputSpeed = Number(localStorage.getItem(speedStorageKey)) || defaultOutputCharsPerSec;
+  const estPrefillSec = Math.max(2, Math.round(inputChars / savedPrefillSpeed));
+
   const startedAt = Date.now();
+  let firstTokenAt = null;
   let streamedChars = 0;
 
   const emitTick = () => {
-    const elapsedSec = (Date.now() - startedAt) / 1000;
-    if (streamedChars > 20) {
-      const liveSpeed = Math.max(15, streamedChars / Math.max(0.25, elapsedSec));
-      const blendedSpeed = savedSpeed * 0.3 + liveSpeed * 0.7;
-      const pct = Math.min(96, Math.max(15, Math.round((streamedChars / expectedChars) * 100)));
-      const etaText = formatEtaSeconds(Math.max(1, (expectedChars - streamedChars) / blendedSpeed));
-      onProgress?.({ pct, etaText, message: `${label}... ${pct}% (${etaText})` });
-    } else {
-      const pct = Math.min(88, Math.max(5, Math.round((elapsedSec / estTotalSec) * 100)));
-      const etaText = formatEtaSeconds(Math.max(1, estTotalSec - elapsedSec));
-      onProgress?.({ pct, etaText, message: `${label}... ${pct}% (${etaText})` });
+    const now = Date.now();
+    if (!firstTokenAt || streamedChars === 0) {
+      const elapsedSec = Math.max(1, Math.round((now - startedAt) / 1000));
+      onProgress?.({
+        pct: 0,
+        etaText: '',
+        message: `${label} · reading input (${elapsedSec}s / ~${estPrefillSec}s)...`,
+      });
+      return;
     }
+
+    const genElapsedSec = Math.max(0.25, (now - firstTokenAt) / 1000);
+    const liveSpeed = Math.max(15, streamedChars / genElapsedSec);
+    const blendedSpeed = savedOutputSpeed * 0.3 + liveSpeed * 0.7;
+    const pct = Math.min(97, Math.max(5, Math.round((streamedChars / expectedOutputChars) * 100)));
+    const remainingChars = Math.max(0, expectedOutputChars - streamedChars);
+    const etaText = formatEtaSeconds(remainingChars / blendedSpeed);
+
+    onProgress?.({
+      pct,
+      etaText,
+      message: `${label} · ${pct}% (${etaText})`,
+    });
   };
 
   emitTick();
-  const timer = setInterval(emitTick, 250);
+  const timer = setInterval(emitTick, 350);
 
   const reportStreamChars = async (charCount) => {
+    if (!firstTokenAt && charCount > 0) {
+      firstTokenAt = Date.now();
+      const prefillSec = Math.max(0.5, (firstTokenAt - startedAt) / 1000);
+      if (inputChars > 300) {
+        localStorage.setItem(PREFILL_SPEED_KEY, String(Math.round(inputChars / prefillSec)));
+      }
+    }
     streamedChars = charCount;
     emitTick();
-    // Yield a macrotask tick so React paints intermediate progress percentages
     await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   try {
     const output = (await execute(reportStreamChars)) || '';
-    const totalSec = Math.max(0.25, (Date.now() - startedAt) / 1000);
-    if (output.length > 40) {
-      localStorage.setItem(speedStorageKey, String(Math.round(output.length / totalSec)));
+    if (firstTokenAt && output.length > 40) {
+      const genTotalSec = Math.max(0.25, (Date.now() - firstTokenAt) / 1000);
+      localStorage.setItem(speedStorageKey, String(Math.round(output.length / genTotalSec)));
     }
     return output.trim();
   } finally {
@@ -195,10 +218,11 @@ export async function summarizeArticle(content, onProgress) {
   const status = await checkNanoStatus();
 
   if (status.summarizer === 'available') {
-    return await runTrackedGeneration({
-      expectedChars: 420,
+    return await runTwoPhaseGeneration({
+      inputChars: cleanText.length,
+      expectedOutputChars: 420,
       speedStorageKey: SUMMARY_SPEED_KEY,
-      defaultCharsPerSec: 80,
+      defaultOutputCharsPerSec: 80,
       label: 'Generating digest',
       onProgress,
       execute: async (reportStreamChars) => {
@@ -222,7 +246,7 @@ export async function summarizeArticle(content, onProgress) {
 
           if (!summarizer) return '';
           if (typeof summarizer.summarizeStreaming === 'function') {
-            const stream = await summarizer.summarizeStreaming(cleanText);
+            const stream = summarizer.summarizeStreaming(cleanText);
             let fullText = '';
             for await (const chunk of stream) {
               if (typeof chunk === 'string') {
@@ -244,10 +268,11 @@ export async function summarizeArticle(content, onProgress) {
   }
 
   if (status.prompt === 'available') {
-    return await runTrackedGeneration({
-      expectedChars: 420,
+    return await runTwoPhaseGeneration({
+      inputChars: cleanText.length,
+      expectedOutputChars: 420,
       speedStorageKey: SUMMARY_SPEED_KEY,
-      defaultCharsPerSec: 75,
+      defaultOutputCharsPerSec: 75,
       label: 'Generating digest',
       onProgress,
       execute: async (reportStreamChars) => {
@@ -262,7 +287,7 @@ export async function summarizeArticle(content, onProgress) {
 
           const prompt = `Summarize the following article in 2 to 3 crisp, informative sentences without filler:\n\n${cleanText}`;
           if (typeof session.promptStreaming === 'function') {
-            const stream = await session.promptStreaming(prompt);
+            const stream = session.promptStreaming(prompt);
             let fullText = '';
             for await (const chunk of stream) {
               if (typeof chunk === 'string') {
@@ -295,10 +320,11 @@ export async function summarizeArticle(content, onProgress) {
   throw new Error('Chrome Built-in AI is unavailable on this device.');
 }
 
-export function buildBriefingPrompt(articles, dateRangeLabel) {
+export function buildBriefingPrompt(articles, dateRangeLabel, maxChars = MAX_BRIEFING_PROMPT_CHARS) {
+  const headerOverhead = 650;
   const perItemBudget = Math.max(
-    280,
-    Math.floor((MAX_BRIEFING_PROMPT_CHARS - 900) / Math.max(1, articles.length))
+    160,
+    Math.floor((maxChars - headerOverhead) / Math.max(1, articles.length))
   );
 
   const itemsBlock = articles
@@ -306,13 +332,13 @@ export function buildBriefingPrompt(articles, dateRangeLabel) {
       const body = (art.digest || art.content || 'Saved link (no extracted text)')
         .trim()
         .slice(0, perItemBudget);
-      return `${idx + 1}. Title: ${art.title}\n   URL: ${art.url}\n   Notes/Digest: ${body}`;
+      return `${idx + 1}. Title: ${art.title}\n   URL: ${art.url}\n   Summary: ${body}`;
     })
     .join('\n\n');
 
   return [
     `You are a sharp research assistant synthesizing a 2-minute reading briefing for ${dateRangeLabel}.`,
-    `Using ONLY the saved items below, write a well-structured Markdown briefing with:`,
+    `Using ONLY the saved items below, write a structured Markdown briefing with:`,
     `1. **Key Takeaways** — bullet points citing sources inline as [Article Title](URL).`,
     `2. **Emerging Themes** — 2 to 3 patterns or connections across these reads.`,
     `Keep it concise, concrete, and under 350 words.`,
@@ -331,12 +357,13 @@ export async function synthesizeBriefing(articles, dateRangeLabel, onProgress) {
     throw new Error('Gemini Nano is still downloading — click "Download AI" in the Side Panel first.');
   }
 
-  const prompt = buildBriefingPrompt(articles, dateRangeLabel);
+  let prompt = buildBriefingPrompt(articles, dateRangeLabel, MAX_BRIEFING_PROMPT_CHARS);
 
-  return await runTrackedGeneration({
-    expectedChars: 1350,
+  return await runTwoPhaseGeneration({
+    inputChars: prompt.length,
+    expectedOutputChars: 1300,
     speedStorageKey: BRIEFING_SPEED_KEY,
-    defaultCharsPerSec: 75,
+    defaultOutputCharsPerSec: 75,
     label: `Synthesizing ${articles.length} post(s)`,
     onProgress,
     execute: async (reportStreamChars) => {
@@ -349,8 +376,16 @@ export async function synthesizeBriefing(articles, dateRangeLabel, onProgress) {
               })
             : await self.ai.languageModel.create();
 
+        // Trim prompt automatically if the device's Gemini Nano session reports a smaller token quota
+        if (typeof session.inputQuota === 'number' && session.inputQuota > 1024) {
+          const safeMaxChars = Math.min(MAX_BRIEFING_PROMPT_CHARS, Math.floor((session.inputQuota - 700) * 3.2));
+          if (prompt.length > safeMaxChars) {
+            prompt = buildBriefingPrompt(articles, dateRangeLabel, safeMaxChars);
+          }
+        }
+
         if (typeof session.promptStreaming === 'function') {
-          const stream = await session.promptStreaming(prompt);
+          const stream = session.promptStreaming(prompt);
           let fullText = '';
           for await (const chunk of stream) {
             if (typeof chunk === 'string') {
