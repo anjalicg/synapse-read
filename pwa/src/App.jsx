@@ -411,6 +411,33 @@ export default function App() {
   const readerAudioId = readerItem ? `article-${readerItem.id}` : null;
   const isReaderPlaying = readerItem && player.activeId === readerAudioId && player.status !== 'idle';
 
+  const sanitizedLandingHtml = React.useMemo(
+    () =>
+      (LANDING_HTML || '').replace(/\sonclick=(["'])(.*?)\1/gi, (_, _q, body) => {
+        const m = body.match(/['"]([^'"]+)['"]/);
+        return m ? ` data-copy="${m[1].replace(/"/g, '&quot;')}"` : '';
+      }),
+    []
+  );
+
+  async function handleLandingClick(e) {
+    const btn = e.target.closest('button, [data-copy], .copy-btn');
+    if (!btn) return;
+    let text = btn.getAttribute('data-copy') || '';
+    if (!text) {
+      const row = btn.closest('.flag-item, .code-block, .copy-row, li, div, p');
+      const codeEl = row?.querySelector('code, pre');
+      if (codeEl && !codeEl.contains(btn)) text = codeEl.textContent.trim();
+    }
+    if (!text) return;
+    e.preventDefault();
+    await navigator.clipboard.writeText(text);
+    const orig = btn.dataset.origLabel || btn.textContent;
+    btn.dataset.origLabel = orig;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  }
+
   return (
     <div className="app-shell">
       {LANDING_CSS && <style>{LANDING_CSS}</style>}
