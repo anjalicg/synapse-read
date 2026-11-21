@@ -1,8 +1,14 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@shared': fileURLToPath(new URL('./shared', import.meta.url)),
+    },
+  },
     plugins: [react()],
     build: {
         outDir: 'dist',

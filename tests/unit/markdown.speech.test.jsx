@@ -1,8 +1,8 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import MarkdownView from '../../pwa/src/MarkdownView.jsx';
-import { cleanMarkdownForSpeech, splitIntoNaturalChunks } from '../../pwa/src/speechPlayer.js';
+import MarkdownView from '@shared/ui/MarkdownView.jsx';
+import { cleanMarkdownForSpeech, splitIntoNaturalChunks } from '@shared/tts/speechPlayer.js';
 
 describe('Markdown Renderer & Web Speech Chunker', () => {
   it('renders multiline Markdown links emitted by Gemini Nano as clickable anchors', () => {

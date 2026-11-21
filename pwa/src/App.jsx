@@ -12,9 +12,9 @@ import {
   extractTextViaDriveOCR,
 } from './googleDrive.js';
 import { LANDING_CSS, LANDING_HTML } from './landingContent.js';
-import ArchitectureDetails from './ArchitectureDetails.jsx';
-import MarkdownView from './MarkdownView.jsx';
-import { useSpeechPlayer } from './speechPlayer.js';
+import ArchitectureDetails from '@shared/ui/ArchitectureDetails.jsx';
+import MarkdownView from '@shared/ui/MarkdownView.jsx';
+import { useSpeechPlayer } from '@shared/tts/speechPlayer.js';
 
 const CLIENT_ID_KEY = 'afterword:pwa:googleClientId';
 const DEFAULT_CLIENT_ID = '355508535747-le46i085l572ehjkklebif8dfqv7eb8f.apps.googleusercontent.com';
