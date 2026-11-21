@@ -27,7 +27,7 @@ function normalizeAvailability(raw) {
 async function getSummarizerAvailability() {
   try {
     if ('Summarizer' in self && typeof self.Summarizer.availability === 'function') {
-      const avail = await self.Summarizer.availability();
+      const avail = await self.Summarizer.availability({ expectedInputLanguages: ['en'], outputLanguage: 'en' });
       return normalizeAvailability(avail);
     }
     if (self.ai?.summarizer?.capabilities) {
@@ -533,3 +533,10 @@ export async function synthesizeBriefing(articles, dateRangeLabel, onProgress) {
 }
 
 export const generateBriefing = synthesizeBriefing;
+
+export function resetNanoSessions() {
+  try { cachedSummarizer?.destroy?.(); } catch {}
+  try { cachedBasePromptSession?.destroy?.(); } catch {}
+  cachedSummarizer = null;
+  cachedBasePromptSession = null;
+}

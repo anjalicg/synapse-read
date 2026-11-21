@@ -6,12 +6,43 @@ import {
   updateArticleNotes,
   recordTombstone,
 } from '../../db.js';
-import { summarizeArticle } from '../../ai/nano.js';
+import { summarizeArticle, resetNanoSessions } from '../../ai/nano.js';
 import { generateEmbedding, cosineSimilarity } from '../../ai/embeddings.js';
 import {
   syncChromeReadingList,
   subscribeReadingListChanges,
 } from '../../sync/readingList.js';
+
+function detectPaywallOrBlockedContent(text) {
+  const clean = (text || '').trim();
+  if (!clean || clean.length < 220) {
+    return 'Full article text was not accessible (the site may require a subscription or JavaScript login).';
+  }
+  const headAndTail = (clean.slice(0, 800) + ' ' + clean.slice(-800)).toLowerCase();
+  const paywallSignals = [
+    'subscribe to continue reading',
+    'subscribe now to read',
+    'already a subscriber',
+    'sign in to continue reading',
+    'log in to continue reading',
+    'create a free account to continue',
+    'reached your article limit',
+    'unlock this article',
+    'for unlimited access',
+  ];
+  if (clean.length < 1200 && paywallSignals.some((sig) => headAndTail.includes(sig))) {
+    return 'Full article text appears blocked by a subscription paywall.';
+  }
+  return null;
+}
+
+function withTimeout(promise, ms, timeoutMessage) {
+  let timerId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timerId = setTimeout(() => reject(new Error(timeoutMessage)), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timerId));
+}
 
 function buildArticleEmbeddingText(item) {
   return [item.title, item.digest, item.userNotes].filter(Boolean).join('\n\n');
@@ -46,11 +77,30 @@ export function useArticles({ setStatusMsg, setBackgroundStatus, onArchiveMutate
   }
 
   async function runBackgroundDigest(id, title, content, userNotes = '', batchPrefix = '') {
+    const blockedReason = detectPaywallOrBlockedContent(content);
+    if (blockedReason) {
+      const friendlyNote = `Saved link only — ${blockedReason} Tip: paste an excerpt via + Note or use + Scan Page.`;
+      await db.articles.update(id, {
+        digest: friendlyNote,
+        status: 'saved',
+        updatedAt: Date.now(),
+      });
+      await loadArticles();
+      setStatusMsg(friendlyNote);
+      setBackgroundStatus('');
+      if (onArchiveMutated) onArchiveMutated();
+      return;
+    }
+
     try {
       setBackgroundStatus(`${batchPrefix}Generating digest... 5% (~5s left)`);
-      const digest = await summarizeArticle(content, ({ message }) => {
-        setBackgroundStatus(`${batchPrefix}${message}`);
-      });
+      const digest = await withTimeout(
+        summarizeArticle(content, ({ message }) => {
+          setBackgroundStatus(`${batchPrefix}${message}`);
+        }),
+        25000,
+        'On-device summary timed out (page may be gated or too complex).'
+      );
       setBackgroundStatus(`${batchPrefix}Indexing semantic vector (~1s left)...`);
       const textToEmbed = [title, digest, userNotes].filter(Boolean).join('\n\n');
       const embedding = await generateEmbedding(textToEmbed);
@@ -64,22 +114,30 @@ export function useArticles({ setStatusMsg, setBackgroundStatus, onArchiveMutate
       setBackgroundStatus('Digest & semantic index ready.');
       if (onArchiveMutated) onArchiveMutated();
     } catch (err) {
-      console.error(err);
+      console.error('Background digest fallback:', err);
+      resetNanoSessions();
+      const fallbackDigest = `Saved post — ${err.message || 'could not summarize automatically'}. You can add highlights via + Note.`;
       try {
         const fallbackText = [title, content.slice(0, 1200), userNotes]
           .filter(Boolean)
           .join('\n\n');
         const embedding = fallbackText ? await generateEmbedding(fallbackText) : null;
         await db.articles.update(id, {
+          digest: fallbackDigest,
           status: 'saved',
           updatedAt: Date.now(),
           ...(embedding ? { embedding } : {}),
         });
       } catch {
-        await db.articles.update(id, { status: 'saved', updatedAt: Date.now() });
+        await db.articles.update(id, {
+          digest: fallbackDigest,
+          status: 'saved',
+          updatedAt: Date.now(),
+        });
       }
       await loadArticles();
-      setBackgroundStatus('Saved item (Nano summary unavailable).');
+      setStatusMsg(fallbackDigest);
+      setBackgroundStatus('');
       if (onArchiveMutated) onArchiveMutated();
     }
   }
@@ -184,8 +242,16 @@ export function useArticles({ setStatusMsg, setBackgroundStatus, onArchiveMutate
 
     await loadArticles();
 
-    if (mode === 'content' && content) {
-      runBackgroundDigest(id, title, content, '');
+    if (mode === 'content') {
+      if (!content) {
+        const msg = 'Saved bookmark — page text could not be extracted (likely paywalled or script-gated).';
+        await db.articles.update(id, { digest: msg });
+        await loadArticles();
+        setStatusMsg(msg);
+        if (onArchiveMutated) onArchiveMutated();
+      } else {
+        runBackgroundDigest(id, title, content, '');
+      }
     } else {
       setStatusMsg('Bookmark saved.');
       if (onArchiveMutated) onArchiveMutated();
