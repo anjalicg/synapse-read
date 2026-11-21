@@ -243,19 +243,16 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <a href="/story.html" className="pill pill-story">
-            <span>▶</span> The Story
-          </a>
-          <a href="/privacy.html" className="pill">
-            Privacy Policy
-          </a>
-          {!isMobile && (
-            <a href="/afterword.zip" download className="pill pill-download">
-              Download Chrome Extension (.zip) ↓
+        {isMobile && (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <a href="/story.html" className="pill pill-story">
+              <span>▶</span> The Story
             </a>
-          )}
-        </div>
+            <a href="/privacy.html" className="pill">
+              Privacy Policy
+            </a>
+          </div>
+        )}
 
         {status && (
           <div style={{ fontSize: '12px', fontFamily: '"JetBrains Mono", monospace', color: 'var(--sage)' }}>
