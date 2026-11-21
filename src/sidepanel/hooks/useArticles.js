@@ -86,7 +86,7 @@ export function useArticles({ setStatusMsg, setBackgroundStatus, onArchiveMutate
 
   // Resumes interrupted digests AND enriches book scans / notes synced from mobile
   async function enrichPendingArticles(metadataList) {
-    const pending = metadataList.filter(
+    const pending = (metadataList || []).filter(
       (item) => item.hasContent && !item.digest && (item.status === 'digesting' || item.source === 'book-scan' || item.source === 'sync')
     );
     if (pending.length === 0) return;

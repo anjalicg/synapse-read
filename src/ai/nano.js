@@ -323,8 +323,8 @@ export async function summarizeArticle(content, onProgress) {
 export function buildBriefingPrompt(articles, dateRangeLabel, maxChars = MAX_BRIEFING_PROMPT_CHARS) {
   const headerOverhead = 650;
   const perItemBudget = Math.max(
-    160,
-    Math.floor((maxChars - headerOverhead) / Math.max(1, articles.length))
+    60,
+    Math.floor((maxChars - headerOverhead) / Math.max(1, articles.length)) - 75
   );
 
   const itemsBlock = articles

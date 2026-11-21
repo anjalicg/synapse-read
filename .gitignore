@@ -5,3 +5,8 @@ dist/
 *-backup-*.json
 .env
 node_modules
+
+# Test logs & artifacts
+test-results.log
+test-results/
+playwright-report/

@@ -431,7 +431,18 @@ export default function App() {
     }
     if (!text) return;
     e.preventDefault();
-    await navigator.clipboard.writeText(text);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
     const orig = btn.dataset.origLabel || btn.textContent;
     btn.dataset.origLabel = orig;
     btn.textContent = 'Copied!';
