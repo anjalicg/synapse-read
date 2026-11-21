@@ -1,7 +1,9 @@
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files';
-const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
-const SYNC_FILENAME = 'afterword-sync.json';
+import {
+  DRIVE_SCOPE,
+  pullDriveSyncFile as sharedPullDriveSyncFile,
+  pushDriveSyncFile as sharedPushDriveSyncFile,
+} from '@shared/sync/driveClient.js';
+
 const TOKEN_CACHE_KEY = 'afterword:driveToken';
 
 function getCachedToken() {
@@ -69,79 +71,12 @@ export async function getExtensionDriveToken(clientId, interactive = true) {
   return accessToken;
 }
 
-async function driveFetch(url, accessToken, options = {}) {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...(options.headers || {}),
-    },
-  });
-  if (res.status === 401) {
-    clearCachedDriveToken();
-    throw new Error('Drive session expired. Click Sync Drive to reconnect.');
-  }
-  return res;
+export function pullDriveSyncFile(accessToken) {
+  return sharedPullDriveSyncFile(accessToken, { onUnauthorized: clearCachedDriveToken });
 }
 
-async function findSyncFile(accessToken) {
-  const q = encodeURIComponent(`name='${SYNC_FILENAME}' and trashed=false`);
-  const res = await driveFetch(
-    `${DRIVE_FILES_URL}?q=${q}&fields=files(id,modifiedTime)&orderBy=modifiedTime desc&pageSize=1`,
-    accessToken
-  );
-  if (!res.ok) throw new Error(`Drive search failed (${res.status})`);
-  const data = await res.json();
-  return data.files?.[0] || null;
-}
-
-export async function pullDriveSyncFile(accessToken) {
-  const file = await findSyncFile(accessToken);
-  if (!file) return null;
-
-  const res = await driveFetch(`${DRIVE_FILES_URL}/${file.id}?alt=media`, accessToken);
-  if (!res.ok) throw new Error(`Drive download failed (${res.status})`);
-  return {
-    fileId: file.id,
-    modifiedTime: file.modifiedTime,
-    jsonText: await res.text(),
-  };
-}
-
-export async function pushDriveSyncFile(accessToken, jsonText, existingFileId = null) {
-  if (existingFileId) {
-    const res = await driveFetch(`${DRIVE_UPLOAD_URL}/${existingFileId}?uploadType=media`, accessToken, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: jsonText,
-    });
-    if (!res.ok) throw new Error(`Drive update failed (${res.status})`);
-    return res.json();
-  }
-
-  const boundary = 'afterword_sync_boundary';
-  const metadata = JSON.stringify({
-    name: SYNC_FILENAME,
-    mimeType: 'application/json',
+export function pushDriveSyncFile(accessToken, jsonText, existingFileId = null) {
+  return sharedPushDriveSyncFile(accessToken, jsonText, existingFileId, {
+    onUnauthorized: clearCachedDriveToken,
   });
-
-  const body = [
-    `--${boundary}`,
-    'Content-Type: application/json; charset=UTF-8',
-    '',
-    metadata,
-    `--${boundary}`,
-    'Content-Type: application/json',
-    '',
-    jsonText,
-    `--${boundary}--`,
-  ].join('\r\n');
-
-  const res = await driveFetch(`${DRIVE_UPLOAD_URL}?uploadType=multipart`, accessToken, {
-    method: 'POST',
-    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-    body,
-  });
-  if (!res.ok) throw new Error(`Drive create failed (${res.status})`);
-  return res.json();
 }
