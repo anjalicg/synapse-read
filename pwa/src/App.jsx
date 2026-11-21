@@ -176,7 +176,7 @@ export default function App() {
   );
   const [token, setToken] = useState('');
   const [status, setStatus] = useState('');
-  const [tab, setTab] = useState('briefings');
+  const [tab, setTab] = useState('overview');
   const [articles, setArticles] = useState([]);
   const [briefings, setBriefings] = useState([]);
   const [query, setQuery] = useState('');
@@ -205,6 +205,7 @@ export default function App() {
     const briefs = await db.briefings.orderBy('createdAt').reverse().toArray();
     setArticles(arts);
     setBriefings(briefs);
+    return { arts, briefs };
   }
 
   useEffect(() => {
@@ -220,15 +221,21 @@ export default function App() {
       const activeToken = existingToken || (await requestMobileDriveToken(activeClientId));
       setToken(activeToken);
 
+      let latest = { arts: articles, briefs: briefings };
       const remote = await pullDriveSyncFile(activeToken);
       if (remote?.jsonText) {
         await mergeRemoteSyncArchive(remote.jsonText);
-        await refreshLocal();
+        latest = await refreshLocal();
       }
 
       const mergedJson = await exportSyncArchiveJSON();
       await pushDriveSyncFile(activeToken, mergedJson, remote?.fileId || null);
       setStatus(`Synced (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`);
+
+      if (tab === 'overview') {
+        if (latest.briefs.length > 0) setTab('briefings');
+        else if (latest.arts.length > 0) setTab('library');
+      }
     } catch (err) {
       console.error(err);
       setStatus(`Sync error: ${err.message}`);
@@ -355,7 +362,14 @@ export default function App() {
 
       <header className="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            onClick={() => {
+              setReaderItem(null);
+              setTab('overview');
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+            title="Return to Overview"
+          >
             <img src="/favicon.svg?v=2" alt="" width="28" height="28" style={{ borderRadius: '6px' }} />
             <div>
               <strong className="serif-title" style={{ fontSize: '21px' }}>Afterword</strong>
@@ -537,6 +551,12 @@ export default function App() {
         <>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
+              className={`pill ${tab === 'overview' ? 'active' : ''}`}
+              onClick={() => setTab('overview')}
+            >
+              Overview
+            </button>
+            <button
               className={`pill ${tab === 'briefings' ? 'active' : ''}`}
               onClick={() => setTab('briefings')}
             >
@@ -557,12 +577,31 @@ export default function App() {
             </button>
           </div>
 
-          {tab === 'architecture' ? (
+          {tab === 'overview' ? (
+            isMobile ? (
+              <section className="card" style={{ background: '#FDF7E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong className="serif-title" style={{ fontSize: '17px' }}>Mobile Companion Workflows</strong>
+                  <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>MOBILE</span>
+                </div>
+                <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <li><strong>Read &amp; Listen:</strong> Tap <em>Sync Drive</em> to pull weekly briefings and saved digests for offline reading or audio playback.</li>
+                  <li><strong>Scan Book Pages:</strong> Tap <em>+ Scan Page</em> to photograph a physical book page, extract text via Drive OCR, and name the book.</li>
+                  <li><strong>Jot Margin Notes:</strong> Add or edit reflections on any saved item and sync back to desktop.</li>
+                </ul>
+                <div style={{ fontSize: '12.5px', padding: '8px 10px', background: 'var(--card)', border: '1.5px solid var(--ink)', borderRadius: '8px' }}>
+                  <strong>Want the full experience?</strong> Open <code>afterword-notes.vercel.app</code> on <strong>desktop Chrome</strong> to download the extension for one-click web clipping, on-device Gemini Nano summaries, semantic search, and weekly synthesis briefings.
+                </div>
+              </section>
+            ) : LANDING_HTML ? (
+              <div className="landing-embed" dangerouslySetInnerHTML={{ __html: LANDING_HTML }} />
+            ) : null
+          ) : tab === 'architecture' ? (
             <ArchitectureDetails onSwitchTab={setTab} />
           ) : tab === 'briefings' ? (
             briefings.length === 0 ? (
               <div className="card">
-                Tap <strong>Sync Drive</strong> to pull briefings from your desktop extension—or explore <strong>Architecture &amp; Design</strong> above to see how Afterword works under the hood.
+                Tap <strong>Sync Drive</strong> to pull briefings from your desktop extension—or check <strong>Overview</strong> for setup steps.
               </div>
             ) : (
               briefings.map((b) => {
@@ -616,131 +655,116 @@ export default function App() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
-              {filteredArticles.map((item) => (
-                <div key={item.id} className="card">
-                  <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>
-                    {item.source === 'book-scan' ? 'BOOK SCAN' : 'ARTICLE'}
+              {filteredArticles.length === 0 ? (
+                <div className="card">
+                  No saved articles or book scans match your filter yet. Tap <strong>Sync Drive</strong> or <strong>+ Scan Page</strong> to add items.
+                </div>
+              ) : (
+                filteredArticles.map((item) => (
+                  <div key={item.id} className="card">
+                    <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>
+                      {item.source === 'book-scan' ? 'BOOK SCAN' : 'ARTICLE'}
+                    </div>
+
+                    {editingTitleId === item.id ? (
+                      <div style={{ margin: '6px 0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <input
+                          autoFocus
+                          className="input"
+                          placeholder="Book title & page #"
+                          value={titleDraft}
+                          onChange={(e) => setTitleDraft(e.target.value)}
+                        />
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button className="btn btn-primary" onClick={() => handleSaveTitle(item)}>
+                            Save Title
+                          </button>
+                          <button className="btn" onClick={() => setEditingTitleId(null)}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => setReaderItem(item)}
+                        className="serif-title"
+                        style={{ fontWeight: 700, fontSize: '17px', cursor: 'pointer', margin: '4px 0' }}
+                      >
+                        {item.title}
+                      </div>
+                    )}
+
+                    {item.digest && <div style={{ fontSize: '13.5px', color: 'var(--ink-muted)' }}>{item.digest}</div>}
+                    {item.userNotes && (
+                      <div className="note-box">
+                        <strong>Note:</strong> {item.userNotes}
+                      </div>
+                    )}
+                    {editingNoteId === item.id ? (
+                      <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <textarea
+                          className="input"
+                          rows={3}
+                          value={noteDraft}
+                          onChange={(e) => setNoteDraft(e.target.value)}
+                        />
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button className="btn btn-primary" onClick={() => handleSaveNote(item)}>
+                            Save Note
+                          </button>
+                          <button className="btn" onClick={() => setEditingNoteId(null)}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+                        <button className="pill" onClick={() => setReaderItem(item)}>
+                          Read
+                        </button>
+                        <button
+                          className="pill"
+                          aria-label="Listen"
+                          title="Listen"
+                          onClick={() => {
+                            setReaderItem(item);
+                            player.playItem(
+                              `article-${item.id}`,
+                              item.content || item.digest || '',
+                              item.title,
+                              0
+                            );
+                          }}
+                        >
+                          <PlaySvg />
+                        </button>
+                        <button
+                          className="pill"
+                          onClick={() => {
+                            setEditingTitleId(item.id);
+                            setTitleDraft(item.title || '');
+                          }}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          className="pill"
+                          onClick={() => {
+                            setEditingNoteId(item.id);
+                            setNoteDraft(item.userNotes || '');
+                          }}
+                        >
+                          {item.userNotes ? 'Edit Note' : '+ Note'}
+                        </button>
+                        <button className="pill" onClick={() => handleDeleteArticle(item)}>
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
-
-                  {editingTitleId === item.id ? (
-                    <div style={{ margin: '6px 0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <input
-                        autoFocus
-                        className="input"
-                        placeholder="Book title & page #"
-                        value={titleDraft}
-                        onChange={(e) => setTitleDraft(e.target.value)}
-                      />
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button className="btn btn-primary" onClick={() => handleSaveTitle(item)}>
-                          Save Title
-                        </button>
-                        <button className="btn" onClick={() => setEditingTitleId(null)}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      onClick={() => setReaderItem(item)}
-                      className="serif-title"
-                      style={{ fontWeight: 700, fontSize: '17px', cursor: 'pointer', margin: '4px 0' }}
-                    >
-                      {item.title}
-                    </div>
-                  )}
-
-                  {item.digest && <div style={{ fontSize: '13.5px', color: 'var(--ink-muted)' }}>{item.digest}</div>}
-                  {item.userNotes && (
-                    <div className="note-box">
-                      <strong>Note:</strong> {item.userNotes}
-                    </div>
-                  )}
-                  {editingNoteId === item.id ? (
-                    <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <textarea
-                        className="input"
-                        rows={3}
-                        value={noteDraft}
-                        onChange={(e) => setNoteDraft(e.target.value)}
-                      />
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button className="btn btn-primary" onClick={() => handleSaveNote(item)}>
-                          Save Note
-                        </button>
-                        <button className="btn" onClick={() => setEditingNoteId(null)}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
-                      <button className="pill" onClick={() => setReaderItem(item)}>
-                        Read
-                      </button>
-                      <button
-                        className="pill"
-                        aria-label="Listen"
-                        title="Listen"
-                        onClick={() => {
-                          setReaderItem(item);
-                          player.playItem(
-                            `article-${item.id}`,
-                            item.content || item.digest || '',
-                            item.title,
-                            0
-                          );
-                        }}
-                      >
-                        <PlaySvg />
-                      </button>
-                      <button
-                        className="pill"
-                        onClick={() => {
-                          setEditingTitleId(item.id);
-                          setTitleDraft(item.title || '');
-                        }}
-                      >
-                        Rename
-                      </button>
-                      <button
-                        className="pill"
-                        onClick={() => {
-                          setEditingNoteId(item.id);
-                          setNoteDraft(item.userNotes || '');
-                        }}
-                      >
-                        {item.userNotes ? 'Edit Note' : '+ Note'}
-                      </button>
-                      <button className="pill" onClick={() => handleDeleteArticle(item)}>
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))
+              )}
             </>
-          )}
-
-          {tab !== 'architecture' && (
-            isMobile ? (
-              <section className="card" style={{ background: '#FDF7E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <strong className="serif-title" style={{ fontSize: '17px' }}>Mobile Companion Workflows</strong>
-                  <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>MOBILE</span>
-                </div>
-                <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <li><strong>Read &amp; Listen:</strong> Tap <em>Sync Drive</em> to pull weekly briefings and saved digests for offline reading or audio playback.</li>
-                  <li><strong>Scan Book Pages:</strong> Tap <em>+ Scan Page</em> to photograph a physical book page, extract text via Drive OCR, and name the book.</li>
-                  <li><strong>Jot Margin Notes:</strong> Add or edit reflections on any saved item and sync back to desktop.</li>
-                </ul>
-                <div style={{ fontSize: '12.5px', padding: '8px 10px', background: 'var(--card)', border: '1.5px solid var(--ink)', borderRadius: '8px' }}>
-                  <strong>Want the full experience?</strong> Open <code>afterword-notes.vercel.app</code> on <strong>desktop Chrome</strong> to download the extension for one-click web clipping, on-device Gemini Nano summaries, semantic search, and weekly synthesis briefings.
-                </div>
-              </section>
-            ) : LANDING_HTML ? (
-              <div className="landing-embed" dangerouslySetInnerHTML={{ __html: LANDING_HTML }} />
-            ) : null
           )}
         </>
       )}
