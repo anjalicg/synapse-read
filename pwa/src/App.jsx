@@ -13,14 +13,161 @@ import {
 } from './googleDrive.js';
 import { LANDING_CSS, LANDING_HTML } from './landingContent.js';
 import ArchitectureDetails from './ArchitectureDetails.jsx';
+import MarkdownView from './MarkdownView.jsx';
+import { useSpeechPlayer } from './speechPlayer.js';
 
 const CLIENT_ID_KEY = 'afterword:pwa:googleClientId';
 const DEFAULT_CLIENT_ID = '355508535747-le46i085l572ehjkklebif8dfqv7eb8f.apps.googleusercontent.com';
+const RATES = [1, 1.25, 1.5, 1.75];
 
 function detectMobileViewport() {
   if (typeof window === 'undefined') return true;
   const uaMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
   return uaMobile || window.innerWidth < 768;
+}
+
+const PlaySvg = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <polygon points="6,4 20,12 6,20" />
+  </svg>
+);
+
+const PauseSvg = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <rect x="6" y="4" width="4" height="16" rx="1" />
+    <rect x="14" y="4" width="4" height="16" rx="1" />
+  </svg>
+);
+
+const StopSvg = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <rect x="6" y="6" width="12" height="12" rx="1.5" />
+  </svg>
+);
+
+const PrevSvg = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <rect x="5" y="5" width="2.5" height="14" />
+    <polygon points="19,5 9,12 19,19" />
+  </svg>
+);
+
+const NextSvg = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <polygon points="5,5 15,12 5,19" />
+    <rect x="16.5" y="5" width="2.5" height="14" />
+  </svg>
+);
+
+function AudioControlBar({ player, itemId, text, title }) {
+  const isCurrent = player.activeId === itemId && player.status !== 'idle';
+  const enVoices = player.voices.filter((v) => /^en(-|_)/i.test(v.lang));
+  const voiceOptions = enVoices.length ? enVoices : player.voices;
+
+  if (!isCurrent) {
+    return (
+      <button
+        type="button"
+        className="pill"
+        aria-label="Listen"
+        title="Listen"
+        onClick={() => player.playItem(itemId, text, title, 0)}
+      >
+        <PlaySvg />
+      </button>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+        padding: '8px 10px',
+        borderRadius: '10px',
+        border: '1.5px solid var(--ink)',
+        background: '#FDF7E7',
+        marginTop: '6px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="pill"
+          aria-label="Previous passage"
+          title="Previous passage"
+          onClick={() => player.skip(-1)}
+        >
+          <PrevSvg />
+        </button>
+        <button
+          type="button"
+          className="pill active"
+          aria-label={player.status === 'playing' ? 'Pause' : 'Resume'}
+          title={player.status === 'playing' ? 'Pause' : 'Resume'}
+          onClick={player.togglePause}
+        >
+          {player.status === 'playing' ? <PauseSvg /> : <PlaySvg />}
+        </button>
+        <button
+          type="button"
+          className="pill"
+          aria-label="Next passage"
+          title="Next passage"
+          onClick={() => player.skip(1)}
+        >
+          <NextSvg />
+        </button>
+        <button
+          type="button"
+          className="pill"
+          aria-label="Stop"
+          title="Stop"
+          onClick={player.stop}
+        >
+          <StopSvg />
+        </button>
+        <button
+          type="button"
+          className="pill"
+          aria-label="Playback speed"
+          title="Change playback speed"
+          onClick={() => {
+            const nextRate = RATES[(RATES.indexOf(player.rate) + 1) % RATES.length];
+            player.changeRate(nextRate);
+          }}
+        >
+          {player.rate}x
+        </button>
+        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: 'var(--ink-muted)', marginLeft: 'auto' }}>
+          {player.currentIndex + 1}/{player.sentences.length}
+        </span>
+      </div>
+
+      {voiceOptions.length > 1 && (
+        <select
+          aria-label="Voice"
+          value={player.selectedVoiceURI}
+          onChange={(e) => player.changeVoice(e.target.value)}
+          style={{
+            border: '1px solid var(--ink)',
+            borderRadius: '6px',
+            padding: '4px 6px',
+            fontSize: '11.5px',
+            background: 'var(--card)',
+            color: 'var(--ink)',
+          }}
+        >
+          {voiceOptions.map((v) => (
+            <option key={v.voiceURI} value={v.voiceURI}>
+              {v.name} ({v.lang})
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
 }
 
 export default function App() {
@@ -39,12 +186,13 @@ export default function App() {
   const [titleDraft, setTitleDraft] = useState('');
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
-  const [speaking, setSpeaking] = useState(false);
 
   const [isMobile, setIsMobile] = useState(detectMobileViewport);
   const [scanDraft, setScanDraft] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const cameraInputRef = useRef(null);
+
+  const player = useSpeechPlayer();
 
   useEffect(() => {
     const onResize = () => setIsMobile(detectMobileViewport());
@@ -176,23 +324,12 @@ export default function App() {
   }
 
   async function handleDeleteArticle(item) {
+    if (player.activeId === `article-${item.id}`) player.stop();
     recordTombstone(item.url);
     await db.articles.delete(item.id);
     if (readerItem?.id === item.id) setReaderItem(null);
     await refreshLocal();
     if (token) await handleSync(token);
-  }
-
-  function toggleSpeak(text) {
-    if (speaking) {
-      window.speechSynthesis.cancel();
-      setSpeaking(false);
-      return;
-    }
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.onend = () => setSpeaking(false);
-    setSpeaking(true);
-    window.speechSynthesis.speak(utter);
   }
 
   const filteredArticles = articles.filter((a) => {
@@ -205,6 +342,12 @@ export default function App() {
       a.content?.toLowerCase().includes(q)
     );
   });
+
+  const readerText = readerItem
+    ? readerItem.content || readerItem.digest || 'No offline body saved for this bookmark.'
+    : '';
+  const readerAudioId = readerItem ? `article-${readerItem.id}` : null;
+  const isReaderPlaying = readerItem && player.activeId === readerAudioId && player.status !== 'idle';
 
   return (
     <div className="app-shell">
@@ -247,7 +390,7 @@ export default function App() {
         {isMobile && (
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
             <a href="/story.html" className="pill pill-story">
-              <span>▶</span> The Story
+              <PlaySvg /> The Story
             </a>
             <a href="/privacy.html" className="pill">
               Privacy Policy
@@ -302,10 +445,16 @@ export default function App() {
       {readerItem ? (
         <article className="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-            <button className="pill" onClick={() => setReaderItem(null)}>
+            <button
+              className="pill"
+              onClick={() => {
+                player.stop();
+                setReaderItem(null);
+              }}
+            >
               ← Back
             </button>
-            <div style={{ display: 'flex', gap: '6px' }}>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               <button
                 className="pill"
                 onClick={() => {
@@ -340,17 +489,49 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <h2 className="serif-title" style={{ margin: 0, fontSize: '20px' }}>{readerItem.title}</h2>
+            <h2 className="serif-title" style={{ margin: 0, fontSize: '21px' }}>{readerItem.title}</h2>
           )}
+
+          <AudioControlBar
+            player={player}
+            itemId={readerAudioId}
+            text={readerText}
+            title={readerItem.title}
+          />
 
           {readerItem.userNotes && (
             <div className="note-box">
               <strong>Note:</strong> {readerItem.userNotes}
             </div>
           )}
-          <div style={{ whiteSpace: 'pre-wrap', fontSize: '15px' }}>
-            {readerItem.content || readerItem.digest || 'No offline body saved for this bookmark.'}
-          </div>
+
+          {isReaderPlaying ? (
+            <div style={{ fontSize: '15.5px', lineHeight: 1.75 }}>
+              {player.sentences.map((chunk, idx) => {
+                const active = idx === player.currentIndex;
+                return (
+                  <span
+                    key={idx}
+                    onClick={() => player.playItem(readerAudioId, readerText, readerItem.title, idx)}
+                    title="Tap to jump to this passage"
+                    style={{
+                      cursor: 'pointer',
+                      background: active ? '#FDE68A' : 'transparent',
+                      borderRadius: '4px',
+                      padding: active ? '2px 4px' : '0',
+                      transition: 'background 0.15s ease',
+                    }}
+                  >
+                    {chunk}{' '}
+                  </span>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ whiteSpace: 'pre-wrap', fontSize: '15.5px', lineHeight: 1.7 }}>
+              {readerText}
+            </div>
+          )}
         </article>
       ) : (
         <>
@@ -384,24 +565,48 @@ export default function App() {
                 Tap <strong>Sync Drive</strong> to pull briefings from your desktop extension—or explore <strong>Architecture &amp; Design</strong> above to see how Afterword works under the hood.
               </div>
             ) : (
-              briefings.map((b) => (
-                <div key={b.id} className="card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '12px', color: 'var(--ink-muted)' }}>
-                      {b.startDate} → {b.endDate}
-                    </span>
-                    <button className="pill" onClick={() => toggleSpeak(b.summaryMarkdown)}>
-                      {speaking ? 'Stop' : 'Listen'}
-                    </button>
-                  </div>
-                  <div style={{ whiteSpace: 'pre-wrap', fontSize: '14px' }}>{b.summaryMarkdown}</div>
-                  {b.userNotes && (
-                    <div className="note-box">
-                      <strong>Reflections:</strong> {b.userNotes}
+              briefings.map((b) => {
+                const bId = `briefing-${b.id}`;
+                const bTitle = `Briefing (${b.startDate} to ${b.endDate})`;
+                const isBriefingPlaying = player.activeId === bId && player.status !== 'idle';
+
+                return (
+                  <div key={b.id} className="card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '12px', color: 'var(--ink-muted)' }}>
+                        {b.startDate} → {b.endDate}
+                      </span>
+                      {!isBriefingPlaying && (
+                        <AudioControlBar
+                          player={player}
+                          itemId={bId}
+                          text={b.summaryMarkdown}
+                          title={bTitle}
+                        />
+                      )}
                     </div>
-                  )}
-                </div>
-              ))
+
+                    {isBriefingPlaying && (
+                      <div style={{ marginBottom: '10px' }}>
+                        <AudioControlBar
+                          player={player}
+                          itemId={bId}
+                          text={b.summaryMarkdown}
+                          title={bTitle}
+                        />
+                      </div>
+                    )}
+
+                    <MarkdownView markdown={b.summaryMarkdown} />
+
+                    {b.userNotes && (
+                      <div className="note-box">
+                        <strong>Reflections:</strong> {b.userNotes}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )
           ) : (
             <>
@@ -475,6 +680,22 @@ export default function App() {
                       </button>
                       <button
                         className="pill"
+                        aria-label="Listen"
+                        title="Listen"
+                        onClick={() => {
+                          setReaderItem(item);
+                          player.playItem(
+                            `article-${item.id}`,
+                            item.content || item.digest || '',
+                            item.title,
+                            0
+                          );
+                        }}
+                      >
+                        <PlaySvg />
+                      </button>
+                      <button
+                        className="pill"
                         onClick={() => {
                           setEditingTitleId(item.id);
                           setTitleDraft(item.title || '');
@@ -501,7 +722,6 @@ export default function App() {
             </>
           )}
 
-          {/* Full guide / README displayed directly underneath on Briefings & Library */}
           {tab !== 'architecture' && (
             isMobile ? (
               <section className="card" style={{ background: '#FDF7E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>

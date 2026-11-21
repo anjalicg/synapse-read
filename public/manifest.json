@@ -11,7 +11,8 @@
     "storage",
     "unlimitedStorage",
     "readingList",
-    "identity"
+    "identity",
+    "contextMenus"
   ],
   "host_permissions": [
     "http://*/*",
