@@ -59,7 +59,10 @@ function renderInline(text) {
 }
 
 export default function MarkdownView({ markdown = '' }) {
-  const lines = (markdown || '').split('\n');
+  const normalized = (markdown || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\]\s*\n\s*\((https?:\/\/)/g, ']($1');
+  const lines = normalized.split('\n');
   const blocks = [];
   let listItems = [];
   let listOrdered = false;
@@ -75,7 +78,7 @@ export default function MarkdownView({ markdown = '' }) {
           paddingLeft: '20px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '4px',
+          gap: '6px',
         }}
       >
         {listItems.map((item, idx) => (
