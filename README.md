@@ -6,7 +6,7 @@ A local-first, privacy-focused Chrome Side Panel extension (Manifest V3) that ca
 
 ## Core Architecture & Privacy Guardrails
 
-* **100% Local Storage & High-Scale Cursor Streaming:** Articles, digests, per-post notes, 384-dimension vector embeddings, and briefings persist locally in IndexedDB via `Dexie.js` (`SynapseReadDB` v3) with `navigator.storage.persist()` and `unlimitedStorage` enabled. Article lists stream via a Dexie cursor (`loadArticleMetadataList`) so full article bodies are never held in React state, scaling smoothly to 10,000+ saved posts.
+* **local-first Storage & High-Scale Cursor Streaming:** Articles, digests, per-post notes, 384-dimension vector embeddings, and briefings persist locally in IndexedDB via `Dexie.js` (`SynapseReadDB` v3) with `navigator.storage.persist()` and `unlimitedStorage` enabled. Article lists stream via a Dexie cursor (`loadArticleMetadataList`) so full article bodies are never held in React state, scaling smoothly to 10,000+ saved posts.
 * **Zero Cloud API Keys or Usage Quotas:** Uses Chrome's built-in **Summarizer API** and **Prompt API (Gemini Nano)** on your local CPU/GPU, paired with a one-click **Copy Prompt** fallback when hardware requirements aren't met.
 * **MV3 CSP-Compliant Semantic Search:** Runs `Xenova/all-MiniLM-L6-v2` (`q8` quantized) inside the extension via locally bundled ONNX WebAssembly (`.wasm`) and `.mjs` runtimes—requiring zero remote scripts or `unsafe-eval`.
 
@@ -56,3 +56,8 @@ npm run build
 rm -rf /tmp/afterword docs/afterword.zip && \
 cp -R dist /tmp/afterword && \
 (cd /tmp && zip -r "$OLDPWD/docs/afterword.zip" afterword)
+
+## Offline Portability & Execution Model
+- **Local-First, Zero Developer Servers:** Articles, margin notes, Gemini Nano summaries, and 384-dim ONNX embeddings (`Xenova/all-MiniLM-L6-v2`) run and persist locally in IndexedDB.
+- **No Google Account Required:** Open **About** in the extension Side Panel to use **Backup JSON** and **Restore JSON** for offline portability without Google Drive.
+- **Optional Cloud Features:** Internet access is only used for initial model weight downloads, optional user-owned Google Drive sync (`drive.file`), transient mobile book-page OCR, and fetching live web pages.
