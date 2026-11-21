@@ -12,6 +12,7 @@ import {
   extractTextViaDriveOCR,
 } from './googleDrive.js';
 import { LANDING_CSS, LANDING_HTML } from './landingContent.js';
+import ArchitectureDetails from './ArchitectureDetails.jsx';
 
 const CLIENT_ID_KEY = 'afterword:pwa:googleClientId';
 const DEFAULT_CLIENT_ID = '355508535747-le46i085l572ehjkklebif8dfqv7eb8f.apps.googleusercontent.com';
@@ -212,7 +213,7 @@ export default function App() {
       <header className="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <img src="/favicon.svg" alt="" width="28" height="28" style={{ borderRadius: '6px' }} />
+            <img src="/favicon.svg?v=2" alt="" width="28" height="28" style={{ borderRadius: '6px' }} />
             <div>
               <strong className="serif-title" style={{ fontSize: '21px' }}>Afterword</strong>
               <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
@@ -353,7 +354,7 @@ export default function App() {
         </article>
       ) : (
         <>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
               className={`pill ${tab === 'briefings' ? 'active' : ''}`}
               onClick={() => setTab('briefings')}
@@ -366,12 +367,21 @@ export default function App() {
             >
               Library ({articles.length})
             </button>
+            <button
+              className={`pill ${tab === 'architecture' ? 'active' : ''}`}
+              style={tab !== 'architecture' ? { background: '#FDF7E7' } : undefined}
+              onClick={() => setTab('architecture')}
+            >
+              Architecture &amp; Design
+            </button>
           </div>
 
-          {tab === 'briefings' ? (
+          {tab === 'architecture' ? (
+            <ArchitectureDetails onSwitchTab={setTab} />
+          ) : tab === 'briefings' ? (
             briefings.length === 0 ? (
               <div className="card">
-                Tap <strong>Sync Drive</strong> to pull briefings from your desktop extension.
+                Tap <strong>Sync Drive</strong> to pull briefings from your desktop extension—or explore <strong>Architecture &amp; Design</strong> above to see how Afterword works under the hood.
               </div>
             ) : (
               briefings.map((b) => (
@@ -491,25 +501,27 @@ export default function App() {
             </>
           )}
 
-          {/* Full guide / README displayed directly underneath by default */}
-          {isMobile ? (
-            <section className="card" style={{ background: '#FDF7E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <strong className="serif-title" style={{ fontSize: '17px' }}>Mobile Companion Workflows</strong>
-                <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>MOBILE</span>
-              </div>
-              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <li><strong>Read &amp; Listen:</strong> Tap <em>Sync Drive</em> to pull weekly briefings and saved digests for offline reading or audio playback.</li>
-                <li><strong>Scan Book Pages:</strong> Tap <em>+ Scan Page</em> to photograph a physical book page, extract text via Drive OCR, and name the book.</li>
-                <li><strong>Jot Margin Notes:</strong> Add or edit reflections on any saved item and sync back to desktop.</li>
-              </ul>
-              <div style={{ fontSize: '12.5px', padding: '8px 10px', background: 'var(--card)', border: '1.5px solid var(--ink)', borderRadius: '8px' }}>
-                <strong>Want the full experience?</strong> Open <code>afterword-notes.vercel.app</code> on <strong>desktop Chrome</strong> to download the extension for one-click web clipping, on-device Gemini Nano summaries, semantic search, and weekly synthesis briefings.
-              </div>
-            </section>
-          ) : LANDING_HTML ? (
-            <div className="landing-embed" dangerouslySetInnerHTML={{ __html: LANDING_HTML }} />
-          ) : null}
+          {/* Full guide / README displayed directly underneath on Briefings & Library */}
+          {tab !== 'architecture' && (
+            isMobile ? (
+              <section className="card" style={{ background: '#FDF7E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong className="serif-title" style={{ fontSize: '17px' }}>Mobile Companion Workflows</strong>
+                  <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>MOBILE</span>
+                </div>
+                <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <li><strong>Read &amp; Listen:</strong> Tap <em>Sync Drive</em> to pull weekly briefings and saved digests for offline reading or audio playback.</li>
+                  <li><strong>Scan Book Pages:</strong> Tap <em>+ Scan Page</em> to photograph a physical book page, extract text via Drive OCR, and name the book.</li>
+                  <li><strong>Jot Margin Notes:</strong> Add or edit reflections on any saved item and sync back to desktop.</li>
+                </ul>
+                <div style={{ fontSize: '12.5px', padding: '8px 10px', background: 'var(--card)', border: '1.5px solid var(--ink)', borderRadius: '8px' }}>
+                  <strong>Want the full experience?</strong> Open <code>afterword-notes.vercel.app</code> on <strong>desktop Chrome</strong> to download the extension for one-click web clipping, on-device Gemini Nano summaries, semantic search, and weekly synthesis briefings.
+                </div>
+              </section>
+            ) : LANDING_HTML ? (
+              <div className="landing-embed" dangerouslySetInnerHTML={{ __html: LANDING_HTML }} />
+            ) : null
+          )}
         </>
       )}
     </div>
