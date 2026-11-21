@@ -270,14 +270,7 @@ export default function App() {
                 ? `Drive Synced (${lastSyncedAt})`
                 : 'Sync Drive'}
           </button>
-          <button
-            type="button"
-            onClick={() => setShowClientConfig((prev) => !prev)}
-            className="sr-pill"
-            title="Configure Google OAuth Client ID"
-          >
-            {clientId ? 'Drive Key ✓' : 'Set Drive Key'}
-          </button>
+          
         </div>
 
         <div>
