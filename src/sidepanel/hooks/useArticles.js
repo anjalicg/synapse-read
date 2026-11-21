@@ -45,10 +45,13 @@ export function useArticles({ setStatusMsg, setBackgroundStatus, onArchiveMutate
     }
   }
 
-  async function runBackgroundDigest(id, title, content, userNotes = '') {
+  async function runBackgroundDigest(id, title, content, userNotes = '', batchPrefix = '') {
     try {
-      setBackgroundStatus('Generating local TL;DR digest...');
-      const digest = await summarizeArticle(content);
+      setBackgroundStatus(`${batchPrefix}Generating TL;DR digest...`);
+      const digest = await summarizeArticle(content, ({ message }) => {
+        setBackgroundStatus(`${batchPrefix}${message}`);
+      });
+      setBackgroundStatus(`${batchPrefix}Indexing semantic vector (~1s left)...`);
       const textToEmbed = [title, digest, userNotes].filter(Boolean).join('\n\n');
       const embedding = await generateEmbedding(textToEmbed);
       await db.articles.update(id, {
@@ -89,14 +92,17 @@ export function useArticles({ setStatusMsg, setBackgroundStatus, onArchiveMutate
     if (pending.length === 0) return;
 
     setBackgroundStatus(`Digesting ${pending.length} item(s)...`);
-    for (const item of pending) {
+    for (let i = 0; i < pending.length; i++) {
+      const item = pending[i];
+      const prefix = pending.length > 1 ? `[${i + 1}/${pending.length}] ` : '';
       const fullRecord = await db.articles.get(item.id);
       if (fullRecord?.content?.trim()) {
         await runBackgroundDigest(
           fullRecord.id,
           fullRecord.title,
           fullRecord.content,
-          fullRecord.userNotes || ''
+          fullRecord.userNotes || '',
+          prefix
         );
       }
     }

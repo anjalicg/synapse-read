@@ -180,7 +180,9 @@ export function useBriefings({
       }
 
       setStatusMsg(`Synthesizing ${windowArticles.length} post(s) with Gemini Nano...`);
-      let summaryMarkdown = await synthesizeBriefing(enriched, `${startDate} to ${endDate}`);
+      let summaryMarkdown = await synthesizeBriefing(enriched, `${startDate} to ${endDate}`, ({ message }) => {
+        setStatusMsg(message);
+      });
 
       if (archiveConnections.length > 0) {
         const archiveLines = archiveConnections

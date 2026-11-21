@@ -146,7 +146,7 @@ export function AboutPanel({
         }}
       >
         <span>{APP_ABOUT.author}</span>
-        <span>100% Local · Zero Telemetry</span>
+        <span>Local-First · Zero Developer Servers · Zero Telemetry</span>
       </div>
     </div>
   );
