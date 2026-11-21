@@ -65,7 +65,62 @@ function AudioControlBar({ player, itemId, text, title }) {
   const voiceOptions = enVoices.length ? enVoices : player.voices;
 
   if (!isCurrent) {
-    return (
+    const sanitizedLandingHtml = React.useMemo(
+    () =>
+      (LANDING_HTML || '').replace(/\sonclick=(["'])(.*?)\1/gi, (_, _q, body) => {
+        const m = body.match(/['"]([^'"]+)['"]/);
+        return m ? ` data-copy="${m[1].replace(/"/g, '&quot;')}"` : '';
+      }),
+    []
+  );
+
+  async function handleLandingClick(e) {
+    const btn = e.target.closest('button, [data-copy], .copy-btn');
+    if (!btn) return;
+
+    let textToCopy =
+      btn.getAttribute('data-copy') ||
+      btn.getAttribute('data-clipboard-text') ||
+      btn.dataset?.text ||
+      '';
+
+    if (!textToCopy) {
+      const container = btn.closest('.flag-item, .code-block, .copy-row, li, div, p');
+      const codeEl = container?.querySelector('code, pre');
+      if (codeEl && !codeEl.contains(btn)) {
+        textToCopy = codeEl.textContent.trim();
+      }
+    }
+
+    if (!textToCopy) return;
+    e.preventDefault();
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = textToCopy;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+
+      const prevLabel = btn.dataset.origLabel || btn.textContent;
+      btn.dataset.origLabel = prevLabel;
+      btn.textContent = 'Copied!';
+      setTimeout(() => {
+        btn.textContent = btn.dataset.origLabel || 'Copy';
+      }, 1500);
+    } catch (err) {
+      console.error('Clipboard copy failed:', err);
+    }
+  }
+
+  return (
       <button
         type="button"
         className="pill"
@@ -594,7 +649,7 @@ export default function App() {
                 </div>
               </section>
             ) : LANDING_HTML ? (
-              <div className="landing-embed" dangerouslySetInnerHTML={{ __html: LANDING_HTML }} />
+              <div className="landing-embed" onClick={handleLandingClick} dangerouslySetInnerHTML={{ __html: sanitizedLandingHtml }} />
             ) : null
           ) : tab === 'architecture' ? (
             <ArchitectureDetails onSwitchTab={setTab} />
