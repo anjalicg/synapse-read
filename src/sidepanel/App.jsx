@@ -28,6 +28,37 @@ import { ArticleCard } from './components/ArticleCard.jsx';
 import { ScanModal } from './components/ScanModal.jsx';
 
 export default function App() {
+  React.useEffect(() => {
+    async function drainPendingContextSaves() {
+      if (!chrome?.storage?.local) return;
+      const res = await chrome.storage.local.get('afterword:pendingSaves');
+      const queue = res['afterword:pendingSaves'] || [];
+      if (!queue.length) return;
+      await chrome.storage.local.remove('afterword:pendingSaves');
+      for (const item of queue) {
+        const now = item.queuedAt || Date.now();
+        await db.articles.put({
+          url: item.url,
+          title: item.title || item.url,
+          content: item.content || '',
+          digest: '',
+          userNotes: '',
+          savedAt: now,
+          updatedAt: now,
+          status: item.content ? 'saved' : 'queued',
+        });
+      }
+      if (typeof articlesHook?.reload === 'function') await articlesHook.reload();
+      else if (typeof articlesHook?.refresh === 'function') await articlesHook.refresh();
+    }
+    drainPendingContextSaves();
+    const onMsg = (msg) => {
+      if (msg?.type === 'AFTERWORD_PENDING_SAVES') drainPendingContextSaves();
+    };
+    chrome.runtime?.onMessage?.addListener(onMsg);
+    return () => chrome.runtime?.onMessage?.removeListener(onMsg);
+  }, []);
+
   const [statusMsg, setStatusMsg] = useState('');
   const [nanoStatus, setNanoStatus] = useState({ summarizer: 'checking', prompt: 'checking' });
   const [showAbout, setShowAbout] = useState(false);

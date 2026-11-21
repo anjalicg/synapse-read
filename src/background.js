@@ -67,3 +67,6 @@ chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
     }
   }
 });
+
+// Auto-register on worker boot
+registerAfterwordContextMenus();

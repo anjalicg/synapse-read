@@ -57,12 +57,8 @@ export function Header({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
-                <button onClick={onSyncList} title="Sync Chrome Reading List" className="sr-pill">
-                    Sync List
-                </button>
-                <button onClick={onBackup} title="Export full JSON backup" className="sr-pill">
-                    Backup
-                </button>
+                
+                
                 <button onClick={() => fileInputRef.current?.click()} title="Import JSON backup" className="sr-pill">
                     Restore
                 </button>
