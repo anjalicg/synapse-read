@@ -11,6 +11,7 @@ import {
   pushDriveSyncFile,
   extractTextViaDriveOCR,
 } from './googleDrive.js';
+import { LANDING_CSS, LANDING_HTML } from './landingContent.js';
 
 const CLIENT_ID_KEY = 'afterword:pwa:googleClientId';
 const DEFAULT_CLIENT_ID = '355508535747-le46i085l572ehjkklebif8dfqv7eb8f.apps.googleusercontent.com';
@@ -33,18 +34,13 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [readerItem, setReaderItem] = useState(null);
 
-  // Inline title & note editing
   const [editingTitleId, setEditingTitleId] = useState(null);
   const [titleDraft, setTitleDraft] = useState('');
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [speaking, setSpeaking] = useState(false);
 
-  // Device-aware README / Guide state
   const [isMobile, setIsMobile] = useState(detectMobileViewport);
-  const [showGuide, setShowGuide] = useState(true);
-
-  // Book scan draft state
   const [scanDraft, setScanDraft] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const cameraInputRef = useRef(null);
@@ -211,21 +207,21 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {LANDING_CSS && <style>{LANDING_CSS}</style>}
+
+      <header className="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-          <div>
-            <strong style={{ fontSize: '18px' }}>Afterword</strong>
-            <div style={{ fontSize: '11.5px', color: 'var(--ink-muted)' }}>
-              Local-first digital commonplace book
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <img src="/favicon.svg" alt="" width="28" height="28" style={{ borderRadius: '6px' }} />
+            <div>
+              <strong className="serif-title" style={{ fontSize: '21px' }}>Afterword</strong>
+              <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
+                Local-first digital commonplace book
+              </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            <button
-              className={`btn ${showGuide ? 'active' : ''}`}
-              onClick={() => setShowGuide((prev) => !prev)}
-            >
-              {showGuide ? 'Hide Guide' : 'Guide'}
-            </button>
+
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <input
               ref={cameraInputRef}
               type="file"
@@ -247,54 +243,26 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', fontSize: '12px', flexWrap: 'wrap' }}>
-          <a href="/story.html" style={{ color: 'var(--ink)', fontWeight: 600 }}>The Story</a>
-          <a href="/privacy.html" style={{ color: 'var(--ink)', fontWeight: 600 }}>Privacy Policy</a>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <a href="/story.html" className="pill pill-story">
+            <span>▶</span> The Story
+          </a>
+          <a href="/privacy.html" className="pill">
+            Privacy Policy
+          </a>
           {!isMobile && (
-            <a href="/afterword.zip" download style={{ color: 'var(--sage)', fontWeight: 700 }}>
+            <a href="/afterword.zip" download className="pill pill-download">
               Download Chrome Extension (.zip) ↓
             </a>
           )}
         </div>
 
-        {status && <div style={{ fontSize: '12px', fontFamily: 'monospace', color: 'var(--sage)' }}>{status}</div>}
+        {status && (
+          <div style={{ fontSize: '12px', fontFamily: '"JetBrains Mono", monospace', color: 'var(--sage)' }}>
+            {status}
+          </div>
+        )}
       </header>
-
-      {showGuide && (
-        <section className="card" style={{ background: '#FDF7E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {isMobile ? (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <strong style={{ fontSize: '15px' }}>Mobile Companion Workflows</strong>
-                <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>MOBILE</span>
-              </div>
-              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <li><strong>Read &amp; Listen:</strong> Tap <em>Sync Drive</em> to pull weekly briefings and saved digests for offline reading or audio playback.</li>
-                <li><strong>Scan Book Pages:</strong> Tap <em>+ Scan Page</em> to photograph a physical book page, extract text via Drive OCR, and name the book.</li>
-                <li><strong>Jot Margin Notes:</strong> Add or edit reflections on any saved item and sync back to desktop.</li>
-              </ul>
-              <div style={{ fontSize: '12.5px', padding: '8px 10px', background: 'var(--card)', border: '1px solid var(--ink)', borderRadius: '8px' }}>
-                <strong>Want the full experience?</strong> Open <code>afterword-notes.vercel.app</code> on <strong>desktop Chrome</strong> to download the extension for one-click web clipping, on-device Gemini Nano summaries, semantic search, and weekly synthesis briefings.
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                <strong style={{ fontSize: '15px' }}>Desktop Chrome Extension — Full Setup</strong>
-                <a href="/afterword.zip" download className="btn btn-primary" style={{ textDecoration: 'none' }}>
-                  Download afterword.zip ↓
-                </a>
-              </div>
-              <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <li><strong>Download &amp; Unzip:</strong> Download <code>afterword.zip</code> above and unzip the <code>afterword</code> folder on your computer.</li>
-                <li><strong>Load in Chrome:</strong> Open <code>chrome://extensions</code>, toggle <strong>Developer mode</strong> on (top right), click <strong>Load unpacked</strong>, and select the unzipped folder.</li>
-                <li><strong>Enable On-Device AI (Optional):</strong> Enable Chrome&apos;s built-in Prompt API / Gemini Nano flags for private local digests and weekly briefings.</li>
-                <li><strong>Sync Everywhere:</strong> Click <strong>Sync Drive</strong> in the extension Side Panel and here to keep your desktop and phone in sync via your own Google Drive.</li>
-              </ol>
-            </>
-          )}
-        </section>
-      )}
 
       {scanDraft && (
         <form className="card" onSubmit={handleSaveScan} style={{ background: '#FDF7E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -374,7 +342,7 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <h2 style={{ margin: 0, fontSize: '18px' }}>{readerItem.title}</h2>
+            <h2 className="serif-title" style={{ margin: 0, fontSize: '20px' }}>{readerItem.title}</h2>
           )}
 
           {readerItem.userNotes && (
@@ -405,12 +373,14 @@ export default function App() {
 
           {tab === 'briefings' ? (
             briefings.length === 0 ? (
-              <div className="card">Tap <strong>Sync Drive</strong> to pull briefings from your desktop extension.</div>
+              <div className="card">
+                Tap <strong>Sync Drive</strong> to pull briefings from your desktop extension.
+              </div>
             ) : (
               briefings.map((b) => (
                 <div key={b.id} className="card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--ink-muted)' }}>
+                    <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '12px', color: 'var(--ink-muted)' }}>
                       {b.startDate} → {b.endDate}
                     </span>
                     <button className="pill" onClick={() => toggleSpeak(b.summaryMarkdown)}>
@@ -436,7 +406,7 @@ export default function App() {
               />
               {filteredArticles.map((item) => (
                 <div key={item.id} className="card">
-                  <div style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>
+                  <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>
                     {item.source === 'book-scan' ? 'BOOK SCAN' : 'ARTICLE'}
                   </div>
 
@@ -461,7 +431,8 @@ export default function App() {
                   ) : (
                     <div
                       onClick={() => setReaderItem(item)}
-                      style={{ fontWeight: 700, fontSize: '15px', cursor: 'pointer', margin: '4px 0' }}
+                      className="serif-title"
+                      style={{ fontWeight: 700, fontSize: '17px', cursor: 'pointer', margin: '4px 0' }}
                     >
                       {item.title}
                     </div>
@@ -522,6 +493,26 @@ export default function App() {
               ))}
             </>
           )}
+
+          {/* Full guide / README displayed directly underneath by default */}
+          {isMobile ? (
+            <section className="card" style={{ background: '#FDF7E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong className="serif-title" style={{ fontSize: '17px' }}>Mobile Companion Workflows</strong>
+                <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>MOBILE</span>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <li><strong>Read &amp; Listen:</strong> Tap <em>Sync Drive</em> to pull weekly briefings and saved digests for offline reading or audio playback.</li>
+                <li><strong>Scan Book Pages:</strong> Tap <em>+ Scan Page</em> to photograph a physical book page, extract text via Drive OCR, and name the book.</li>
+                <li><strong>Jot Margin Notes:</strong> Add or edit reflections on any saved item and sync back to desktop.</li>
+              </ul>
+              <div style={{ fontSize: '12.5px', padding: '8px 10px', background: 'var(--card)', border: '1.5px solid var(--ink)', borderRadius: '8px' }}>
+                <strong>Want the full experience?</strong> Open <code>afterword-notes.vercel.app</code> on <strong>desktop Chrome</strong> to download the extension for one-click web clipping, on-device Gemini Nano summaries, semantic search, and weekly synthesis briefings.
+              </div>
+            </section>
+          ) : LANDING_HTML ? (
+            <div className="landing-embed" dangerouslySetInnerHTML={{ __html: LANDING_HTML }} />
+          ) : null}
         </>
       )}
     </div>
