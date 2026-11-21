@@ -10,14 +10,19 @@
     "scripting",
     "storage",
     "unlimitedStorage",
-    "readingList"
+    "readingList",
+    "identity"
   ],
   "host_permissions": [
     "http://*/*",
     "https://*/*"
   ],
   "action": {
-    "default_title": "Open Afterword"
+    "default_title": "Open Afterword",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
   },
   "side_panel": {
     "default_path": "sidepanel.html"
@@ -35,11 +40,5 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "action": {
-    "default_title": "Open Afterword",
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "32": "icons/icon32.png"
-    }
-  }
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyDBvG/3DQVbwoRXfrEOrQdRuCsYN2rirVWenUxXpUeIxZGhWRgcJmQxWfPbQr6zPGCh3Nzh9yTkg6em1Tyfit+x6j86UUbTPnz9HsiA0HqJZatJTEMe9r7EtCmyY72mTMmEwuviL3/U3TycVZNJkvc/MTDOlSwcxwe++fh+3hx+bDEYbf79hP7mbT1zCp3CjNvRMm5V88VLPsjgUNZq9zySLRpSn88qdMagR3Bw0Uvpk2Zy++UFyHkzW8npO33PTq2nZ/Vz8JLPolQj+lGcqLd+XgPX4lNojp2mBAu4NUSztxUG4Vq+aBV0udznzsYLgY82in0wkz/euzGX599Z8QwIDAQAB"
 }

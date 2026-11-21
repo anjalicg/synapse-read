@@ -4,8 +4,17 @@ import {
   ensurePersistentStorage,
   exportArchiveJSON,
   importArchiveJSON,
+  exportSyncArchiveJSON,
+  mergeRemoteSyncArchive,
 } from '../db.js';
 import { checkNanoStatus, warmupNanoModel } from '../ai/nano.js';
+import { getGoogleClientId, setGoogleClientId } from '../config.js';
+import {
+  getExtensionDriveToken,
+  pullDriveSyncFile,
+  pushDriveSyncFile,
+} from '../sync/googleDrive.js';
+import { extractTextViaDriveOCR } from '../sync/imageOcr.js';
 import { formatDateInput } from './utils/formatters.js';
 import { useSpeechBriefing } from './hooks/useSpeechBriefing.js';
 import { useArticles } from './hooks/useArticles.js';
@@ -16,13 +25,27 @@ import { AboutPanel } from './components/AboutPanel.jsx';
 import { BriefingPanel } from './components/BriefingPanel.jsx';
 import { SearchSection } from './components/SearchSection.jsx';
 import { ArticleCard } from './components/ArticleCard.jsx';
+import { ScanModal } from './components/ScanModal.jsx';
 
 export default function App() {
   const [statusMsg, setStatusMsg] = useState('');
   const [nanoStatus, setNanoStatus] = useState({ summarizer: 'checking', prompt: 'checking' });
   const [showAbout, setShowAbout] = useState(false);
   const [isBriefingMinimized, setIsBriefingMinimized] = useState(false);
+
+  // Google Drive sync & Scan state
+  const [clientId, setClientId] = useState(() => getGoogleClientId());
+  const [showClientConfig, setShowClientConfig] = useState(false);
+  const [isSyncingDrive, setIsSyncingDrive] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState('');
+
+  const [scanOpen, setScanOpen] = useState(false);
+  const [isExtractingOcr, setIsExtractingOcr] = useState(false);
+  const [ocrText, setOcrText] = useState('');
+  const [ocrPreviewUrl, setOcrPreviewUrl] = useState('');
+
   const isGeneratingRef = useRef(false);
+  const fileInputRef = useRef(null);
 
   function setBackgroundStatus(msg) {
     if (!isGeneratingRef.current) {
@@ -40,6 +63,11 @@ export default function App() {
   const articlesHook = useArticles({
     setStatusMsg,
     setBackgroundStatus,
+    onArchiveMutated: () => {
+      if (getGoogleClientId()) {
+        handleDriveSync(true);
+      }
+    },
   });
 
   const briefingsHook = useBriefings({
@@ -47,7 +75,10 @@ export default function App() {
     isGeneratingRef,
     ensureAllEmbeddings: articlesHook.ensureAllEmbeddings,
     loadArticles: articlesHook.loadArticles,
-    onBeforeBriefingChange: () => { speech.stop(); setIsBriefingMinimized(false); },
+    onBeforeBriefingChange: () => {
+      speech.stop();
+      setIsBriefingMinimized(false);
+    },
   });
 
   const search = useSemanticSearch({
@@ -56,6 +87,99 @@ export default function App() {
     ensureBriefingEmbeddings: briefingsHook.ensureBriefingEmbeddings,
     setStatusMsg,
   });
+
+  async function handleDriveSync(silent = false) {
+    const activeClientId = getGoogleClientId();
+    if (!activeClientId) {
+      if (!silent) setShowClientConfig(true);
+      return;
+    }
+
+    setIsSyncingDrive(true);
+    if (!silent) setStatusMsg('Syncing with Google Drive...');
+
+    try {
+      const token = await getExtensionDriveToken(activeClientId, !silent);
+      const remote = await pullDriveSyncFile(token);
+
+      if (remote?.jsonText) {
+        const mergeRes = await mergeRemoteSyncArchive(remote.jsonText);
+        const refreshed = await articlesHook.loadArticles();
+        await briefingsHook.loadBriefings();
+        await articlesHook.enrichPendingArticles(refreshed);
+
+        if (
+          !silent &&
+          (mergeRes.addedArticles > 0 ||
+            mergeRes.updatedArticles > 0 ||
+            mergeRes.addedBriefings > 0)
+        ) {
+          setStatusMsg(
+            `Drive synced: +${mergeRes.addedArticles} new, ${mergeRes.updatedArticles} updated post(s).`
+          );
+        }
+      }
+
+      const localSyncJson = await exportSyncArchiveJSON();
+      await pushDriveSyncFile(token, localSyncJson, remote?.fileId || null);
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setLastSyncedAt(timeStr);
+      if (!silent) setStatusMsg(`Google Drive synced (${timeStr}).`);
+    } catch (err) {
+      console.error('Drive sync failed:', err);
+      if (!silent) setStatusMsg(`Drive sync: ${err.message}`);
+    } finally {
+      setIsSyncingDrive(false);
+    }
+  }
+
+  async function processImageFileForOcr(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const activeClientId = getGoogleClientId();
+    if (!activeClientId) {
+      setShowClientConfig(true);
+      setStatusMsg('Enter your Google OAuth Client ID to enable Drive OCR.');
+      return;
+    }
+
+    if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
+    setOcrPreviewUrl(URL.createObjectURL(file));
+    setOcrText('');
+    setScanOpen(true);
+    setIsExtractingOcr(true);
+
+    try {
+      const token = await getExtensionDriveToken(activeClientId, true);
+      const extracted = await extractTextViaDriveOCR(token, file);
+      setOcrText(extracted);
+    } catch (err) {
+      console.error('OCR failed:', err);
+      setStatusMsg(`OCR error: ${err.message}`);
+      setScanOpen(false);
+    } finally {
+      setIsExtractingOcr(false);
+    }
+  }
+
+  // Support Cmd+V / Ctrl+V pasting of screenshots anywhere in the Side Panel
+  useEffect(() => {
+    function handlePaste(e) {
+      const items = e.clipboardData?.items || [];
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            processImageFileForOcr(file);
+            break;
+          }
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [clientId]);
 
   async function handleExportJSON() {
     const json = await exportArchiveJSON();
@@ -103,7 +227,17 @@ export default function App() {
   const nanoReady = nanoStatus.prompt !== 'unavailable';
 
   return (
-    <div className="sr-shell">
+    <div
+      className="sr-shell"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        const file = e.dataTransfer?.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+          e.preventDefault();
+          processImageFileForOcr(file);
+        }
+      }}
+    >
       <Header
         nanoReady={nanoReady}
         showAbout={showAbout}
@@ -111,6 +245,106 @@ export default function App() {
         onSyncList={() => articlesHook.syncReadingList(false)}
         onBackup={handleExportJSON}
         onRestore={handleImportJSON}
+      />
+
+      {/* Google Drive Sync & Book Page OCR Toolbar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '6px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button
+            type="button"
+            onClick={() => handleDriveSync(false)}
+            disabled={isSyncingDrive}
+            className="sr-pill"
+          >
+            {isSyncingDrive
+              ? 'Syncing...'
+              : lastSyncedAt
+                ? `Drive Synced (${lastSyncedAt})`
+                : 'Sync Drive'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowClientConfig((prev) => !prev)}
+            className="sr-pill"
+            title="Configure Google OAuth Client ID"
+          >
+            {clientId ? 'Drive Key ✓' : 'Set Drive Key'}
+          </button>
+        </div>
+
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) processImageFileForOcr(file);
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="sr-pill"
+            title="Scan book image, drop an image, or press Cmd+V to paste"
+          >
+            + Scan Image
+          </button>
+        </div>
+      </div>
+
+      {showClientConfig && (
+        <div
+          className="sr-card"
+          style={{ '--accent': 'var(--periwinkle)', display: 'flex', flexDirection: 'column', gap: '6px' }}
+        >
+          <div style={{ fontSize: '11px', fontWeight: 600 }}>
+            Google OAuth Web Client ID (for Drive Sync & Free OCR)
+          </div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <input
+              type="text"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              placeholder="123456789-xxxx.apps.googleusercontent.com"
+              className="sr-input"
+              style={{ flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setGoogleClientId(clientId);
+                setShowClientConfig(false);
+                handleDriveSync(false);
+              }}
+              className="sr-btn sr-btn-primary"
+            >
+              Save & Sync
+            </button>
+          </div>
+        </div>
+      )}
+
+      <ScanModal
+        isOpen={scanOpen}
+        isExtracting={isExtractingOcr}
+        initialText={ocrText}
+        previewUrl={ocrPreviewUrl}
+        onClose={() => setScanOpen(false)}
+        onSaveScan={async (scanData) => {
+          setScanOpen(false);
+          await articlesHook.saveScannedExcerpt(scanData);
+        }}
       />
 
       {!showAbout && nanoStatus.prompt === 'downloadable' && (

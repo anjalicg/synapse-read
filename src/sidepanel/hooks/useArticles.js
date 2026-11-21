@@ -4,6 +4,7 @@ import {
   db,
   loadArticleMetadataList,
   updateArticleNotes,
+  recordTombstone,
 } from '../../db.js';
 import { summarizeArticle } from '../../ai/nano.js';
 import { generateEmbedding, cosineSimilarity } from '../../ai/embeddings.js';
@@ -16,7 +17,7 @@ function buildArticleEmbeddingText(item) {
   return [item.title, item.digest, item.userNotes].filter(Boolean).join('\n\n');
 }
 
-export function useArticles({ setStatusMsg, setBackgroundStatus }) {
+export function useArticles({ setStatusMsg, setBackgroundStatus, onArchiveMutated }) {
   const [articles, setArticles] = useState([]);
   const [fetchingMap, setFetchingMap] = useState({});
   const [relatedMap, setRelatedMap] = useState({});
@@ -50,9 +51,15 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
       const digest = await summarizeArticle(content);
       const textToEmbed = [title, digest, userNotes].filter(Boolean).join('\n\n');
       const embedding = await generateEmbedding(textToEmbed);
-      await db.articles.update(id, { digest, embedding, status: 'digested' });
+      await db.articles.update(id, {
+        digest,
+        embedding,
+        status: 'digested',
+        updatedAt: Date.now(),
+      });
       await loadArticles();
       setBackgroundStatus('Digest & semantic index ready.');
+      if (onArchiveMutated) onArchiveMutated();
     } catch (err) {
       console.error(err);
       try {
@@ -62,23 +69,26 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
         const embedding = fallbackText ? await generateEmbedding(fallbackText) : null;
         await db.articles.update(id, {
           status: 'saved',
+          updatedAt: Date.now(),
           ...(embedding ? { embedding } : {}),
         });
       } catch {
-        await db.articles.update(id, { status: 'saved' });
+        await db.articles.update(id, { status: 'saved', updatedAt: Date.now() });
       }
       await loadArticles();
-      setBackgroundStatus('Saved article (Nano summary unavailable).');
+      setBackgroundStatus('Saved item (Nano summary unavailable).');
+      if (onArchiveMutated) onArchiveMutated();
     }
   }
 
-  async function resumePendingDigests(metadataList) {
+  // Resumes interrupted digests AND enriches book scans / notes synced from mobile
+  async function enrichPendingArticles(metadataList) {
     const pending = metadataList.filter(
-      (item) => item.status === 'digesting' && item.hasContent && !item.digest
+      (item) => item.hasContent && !item.digest && (item.status === 'digesting' || item.source === 'book-scan' || item.source === 'sync')
     );
     if (pending.length === 0) return;
 
-    setBackgroundStatus(`Resuming ${pending.length} interrupted digest(s)...`);
+    setBackgroundStatus(`Digesting ${pending.length} item(s)...`);
     for (const item of pending) {
       const fullRecord = await db.articles.get(item.id);
       if (fullRecord?.content?.trim()) {
@@ -93,7 +103,7 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
   }
 
   useEffect(() => {
-    loadArticles().then((list) => resumePendingDigests(list));
+    loadArticles().then((list) => enrichPendingArticles(list));
     syncReadingList(true);
     const unsubscribe = subscribeReadingListChanges(() => syncReadingList(true));
     return () => unsubscribe();
@@ -152,6 +162,7 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
       }
     }
 
+    const now = Date.now();
     const id = await db.articles.add({
       url: tab.url,
       title,
@@ -159,7 +170,8 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
       digest: '',
       userNotes: '',
       embedding: null,
-      savedAt: Date.now(),
+      savedAt: now,
+      updatedAt: now,
       status: mode === 'content' && content ? 'digesting' : 'saved',
       source: 'extension',
     });
@@ -170,7 +182,28 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
       runBackgroundDigest(id, title, content, '');
     } else {
       setStatusMsg('Bookmark saved.');
+      if (onArchiveMutated) onArchiveMutated();
     }
+  }
+
+  async function saveScannedExcerpt({ title, content, userNotes = '' }) {
+    const now = Date.now();
+    const url = `afterword://book-scan/${now}`;
+    const id = await db.articles.add({
+      url,
+      title,
+      content,
+      digest: '',
+      userNotes,
+      embedding: null,
+      savedAt: now,
+      updatedAt: now,
+      status: 'digesting',
+      source: 'book-scan',
+    });
+
+    await loadArticles();
+    runBackgroundDigest(id, title, content, userNotes);
   }
 
   async function saveArticleNotes(item, rawNotes) {
@@ -178,6 +211,8 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
     if (trimmed === (item.userNotes || '').trim()) return;
 
     await updateArticleNotes(item.id, trimmed);
+    await db.articles.update(item.id, { updatedAt: Date.now() });
+
     const updatedItem = { ...item, userNotes: trimmed };
     const embedSource = buildArticleEmbeddingText(updatedItem);
 
@@ -192,6 +227,7 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
 
     await loadArticles();
     setBackgroundStatus('Post note saved.');
+    if (onArchiveMutated) onArchiveMutated();
   }
 
   async function fetchAndDigest(item) {
@@ -218,6 +254,7 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
         title,
         content,
         status: 'digesting',
+        updatedAt: Date.now(),
       });
       await loadArticles();
 
@@ -267,6 +304,10 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
   }
 
   async function deleteArticle(id) {
+    const existing = await db.articles.get(id);
+    if (existing?.url) {
+      recordTombstone(existing.url);
+    }
     await db.articles.delete(id);
     setRelatedMap((prev) => {
       const next = { ...prev };
@@ -274,6 +315,7 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
       return next;
     });
     await loadArticles();
+    if (onArchiveMutated) onArchiveMutated();
   }
 
   return {
@@ -281,9 +323,11 @@ export function useArticles({ setStatusMsg, setBackgroundStatus }) {
     fetchingMap,
     relatedMap,
     loadArticles,
+    enrichPendingArticles,
     syncReadingList,
     ensureAllEmbeddings,
     saveActiveTab,
+    saveScannedExcerpt,
     saveArticleNotes,
     fetchAndDigest,
     toggleRelated,
