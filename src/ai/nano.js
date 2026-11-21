@@ -1,8 +1,12 @@
-const MAX_SUMMARY_INPUT_CHARS = 10000;
+const MAX_SUMMARY_INPUT_CHARS = 3600;
 const MAX_BRIEFING_PROMPT_CHARS = 7500;
+const BRIEFING_BATCH_SIZE = 5;
 const PREFILL_SPEED_KEY = 'afterword:nanoPrefillCharsPerSec';
 const SUMMARY_SPEED_KEY = 'afterword:nanoSummaryCharsPerSec';
 const BRIEFING_SPEED_KEY = 'afterword:nanoBriefingCharsPerSec';
+
+let cachedBasePromptSession = null;
+let cachedSummarizer = null;
 
 export function formatEtaSeconds(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return '~1s left';
@@ -87,57 +91,88 @@ function attachProgressMonitor(onStatus, label) {
   };
 }
 
+async function getOrCreateWarmSummarizer(monitor) {
+  if (cachedSummarizer) return { instance: cachedSummarizer, shared: true };
+
+  let instance = null;
+  if ('Summarizer' in self) {
+    instance = await self.Summarizer.create({
+      type: 'tldr',
+      format: 'plain-text',
+      length: 'medium',
+      expectedInputLanguages: ['en'],
+      outputLanguage: 'en',
+      ...(monitor ? { monitor } : {}),
+    });
+  } else if (self.ai?.summarizer?.create) {
+    instance = await self.ai.summarizer.create({
+      type: 'tl;dr',
+      format: 'plain-text',
+      length: 'medium',
+      ...(monitor ? { monitor } : {}),
+    });
+  }
+
+  if (instance) {
+    cachedSummarizer = instance;
+    return { instance, shared: true };
+  }
+  return { instance: null, shared: false };
+}
+
+async function acquirePromptSession(monitor) {
+  // Reuse warm session via .clone() when supported so system KV-cache stays hot
+  if (cachedBasePromptSession && typeof cachedBasePromptSession.clone === 'function') {
+    try {
+      const cloned = await cachedBasePromptSession.clone();
+      return { session: cloned, disposable: true };
+    } catch {
+      cachedBasePromptSession = null;
+    }
+  }
+
+  const createOpts = {
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    ...(monitor ? { monitor } : {}),
+  };
+
+  const session =
+    'LanguageModel' in self
+      ? await self.LanguageModel.create(createOpts)
+      : await self.ai.languageModel.create(monitor ? { monitor } : undefined);
+
+  if (session && typeof session.clone === 'function' && !cachedBasePromptSession) {
+    cachedBasePromptSession = session;
+    try {
+      const cloned = await session.clone();
+      return { session: cloned, disposable: true };
+    } catch {
+      return { session, disposable: false };
+    }
+  }
+
+  return { session, disposable: true };
+}
+
 export async function warmupNanoModel(onStatus) {
   const status = await checkNanoStatus();
 
   if (status.prompt !== 'unavailable') {
-    onStatus?.('Initializing Gemini Nano Prompt API...');
-    let session = null;
-    try {
-      if ('LanguageModel' in self) {
-        session = await self.LanguageModel.create({
-          expectedOutputs: [{ type: 'text', languages: ['en'] }],
-          monitor: attachProgressMonitor(onStatus, 'Gemini Nano'),
-        });
-      } else if (self.ai?.languageModel?.create) {
-        session = await self.ai.languageModel.create({
-          monitor: attachProgressMonitor(onStatus, 'Gemini Nano'),
-        });
-      }
-    } finally {
-      session?.destroy?.();
-    }
+    onStatus?.('Warming up Gemini Nano Prompt API...');
+    const { session, disposable } = await acquirePromptSession(
+      attachProgressMonitor(onStatus, 'Gemini Nano')
+    );
+    if (disposable) session?.destroy?.();
   }
 
   if (status.summarizer !== 'unavailable') {
-    onStatus?.('Initializing Summarizer model...');
-    let summarizer = null;
-    try {
-      if ('Summarizer' in self) {
-        summarizer = await self.Summarizer.create({
-          type: 'tldr',
-          format: 'plain-text',
-          length: 'medium',
-          expectedInputLanguages: ['en'],
-          outputLanguage: 'en',
-          monitor: attachProgressMonitor(onStatus, 'Summarizer'),
-        });
-      } else if (self.ai?.summarizer?.create) {
-        summarizer = await self.ai.summarizer.create({
-          type: 'tl;dr',
-          format: 'plain-text',
-          length: 'medium',
-          monitor: attachProgressMonitor(onStatus, 'Summarizer'),
-        });
-      }
-    } finally {
-      summarizer?.destroy?.();
-    }
+    onStatus?.('Warming up Summarizer model...');
+    await getOrCreateWarmSummarizer(attachProgressMonitor(onStatus, 'Summarizer'));
   }
 }
 
-// Phase 1: Honest elapsed + calibrated prefill estimate while Nano reads input.
-// Phase 2: Live % and ~Xs left only once output tokens start streaming.
+// Phase 1: Honest elapsed + calibrated estimate while Nano reads input.
+// Phase 2: Live % and ~Xs left once output tokens start streaming.
 async function runTwoPhaseGeneration({
   inputChars,
   expectedOutputChars,
@@ -147,7 +182,7 @@ async function runTwoPhaseGeneration({
   onProgress,
   execute,
 }) {
-  const savedPrefillSpeed = Number(localStorage.getItem(PREFILL_SPEED_KEY)) || 550;
+  const savedPrefillSpeed = Number(localStorage.getItem(PREFILL_SPEED_KEY)) || 600;
   const savedOutputSpeed = Number(localStorage.getItem(speedStorageKey)) || defaultOutputCharsPerSec;
   const estPrefillSec = Math.max(2, Math.round(inputChars / savedPrefillSpeed));
 
@@ -159,10 +194,14 @@ async function runTwoPhaseGeneration({
     const now = Date.now();
     if (!firstTokenAt || streamedChars === 0) {
       const elapsedSec = Math.max(1, Math.round((now - startedAt) / 1000));
+      const prefillLabel =
+        elapsedSec <= estPrefillSec
+          ? `reading input (${elapsedSec}s / ~${estPrefillSec}s)`
+          : `reading input (${elapsedSec}s elapsed)`;
       onProgress?.({
         pct: 0,
         etaText: '',
-        message: `${label} · reading input (${elapsedSec}s / ~${estPrefillSec}s)...`,
+        message: `${label} · ${prefillLabel}...`,
       });
       return;
     }
@@ -209,8 +248,16 @@ async function runTwoPhaseGeneration({
   }
 }
 
+function sliceLeadAndConclusion(rawText, maxChars = MAX_SUMMARY_INPUT_CHARS) {
+  const clean = (rawText || '').trim();
+  if (clean.length <= maxChars) return clean;
+  const headChars = Math.floor(maxChars * 0.72);
+  const tailChars = maxChars - headChars;
+  return `${clean.slice(0, headChars)}\n...\n${clean.slice(-tailChars)}`;
+}
+
 export async function summarizeArticle(content, onProgress) {
-  const cleanText = (content || '').trim().slice(0, MAX_SUMMARY_INPUT_CHARS);
+  const cleanText = sliceLeadAndConclusion(content, MAX_SUMMARY_INPUT_CHARS);
   if (!cleanText) {
     throw new Error('No article text available to summarize.');
   }
@@ -220,31 +267,15 @@ export async function summarizeArticle(content, onProgress) {
   if (status.summarizer === 'available') {
     return await runTwoPhaseGeneration({
       inputChars: cleanText.length,
-      expectedOutputChars: 420,
+      expectedOutputChars: 380,
       speedStorageKey: SUMMARY_SPEED_KEY,
-      defaultOutputCharsPerSec: 80,
+      defaultOutputCharsPerSec: 85,
       label: 'Generating digest',
       onProgress,
       execute: async (reportStreamChars) => {
-        let summarizer = null;
+        const { instance: summarizer } = await getOrCreateWarmSummarizer();
+        if (!summarizer) return '';
         try {
-          if ('Summarizer' in self) {
-            summarizer = await self.Summarizer.create({
-              type: 'tldr',
-              format: 'plain-text',
-              length: 'medium',
-              expectedInputLanguages: ['en'],
-              outputLanguage: 'en',
-            });
-          } else if (self.ai?.summarizer?.create) {
-            summarizer = await self.ai.summarizer.create({
-              type: 'tl;dr',
-              format: 'plain-text',
-              length: 'medium',
-            });
-          }
-
-          if (!summarizer) return '';
           if (typeof summarizer.summarizeStreaming === 'function') {
             const stream = summarizer.summarizeStreaming(cleanText);
             let fullText = '';
@@ -260,8 +291,9 @@ export async function summarizeArticle(content, onProgress) {
             return fullText;
           }
           return await summarizer.summarize(cleanText);
-        } finally {
-          summarizer?.destroy?.();
+        } catch (err) {
+          cachedSummarizer = null;
+          throw err;
         }
       },
     });
@@ -270,21 +302,14 @@ export async function summarizeArticle(content, onProgress) {
   if (status.prompt === 'available') {
     return await runTwoPhaseGeneration({
       inputChars: cleanText.length,
-      expectedOutputChars: 420,
+      expectedOutputChars: 380,
       speedStorageKey: SUMMARY_SPEED_KEY,
-      defaultOutputCharsPerSec: 75,
+      defaultOutputCharsPerSec: 80,
       label: 'Generating digest',
       onProgress,
       execute: async (reportStreamChars) => {
-        let session = null;
+        const { session, disposable } = await acquirePromptSession();
         try {
-          session =
-            'LanguageModel' in self
-              ? await self.LanguageModel.create({
-                  expectedOutputs: [{ type: 'text', languages: ['en'] }],
-                })
-              : await self.ai.languageModel.create();
-
           const prompt = `Summarize the following article in 2 to 3 crisp, informative sentences without filler:\n\n${cleanText}`;
           if (typeof session.promptStreaming === 'function') {
             const stream = session.promptStreaming(prompt);
@@ -302,7 +327,7 @@ export async function summarizeArticle(content, onProgress) {
           }
           return await session.prompt(prompt);
         } finally {
-          session?.destroy?.();
+          if (disposable) session?.destroy?.();
         }
       },
     });
@@ -348,6 +373,29 @@ export function buildBriefingPrompt(articles, dateRangeLabel, maxChars = MAX_BRI
   ].join('\n');
 }
 
+async function runPromptText(prompt, reportStreamChars) {
+  const { session, disposable } = await acquirePromptSession();
+  try {
+    if (typeof session.promptStreaming === 'function') {
+      const stream = session.promptStreaming(prompt);
+      let fullText = '';
+      for await (const chunk of stream) {
+        if (typeof chunk === 'string') {
+          fullText =
+            chunk.startsWith(fullText) && chunk.length >= fullText.length
+              ? chunk
+              : fullText + chunk;
+          if (reportStreamChars) await reportStreamChars(fullText.length);
+        }
+      }
+      return fullText;
+    }
+    return await session.prompt(prompt);
+  } finally {
+    if (disposable) session?.destroy?.();
+  }
+}
+
 export async function synthesizeBriefing(articles, dateRangeLabel, onProgress) {
   const status = await getPromptAvailability();
   if (status === 'unavailable') {
@@ -357,53 +405,131 @@ export async function synthesizeBriefing(articles, dateRangeLabel, onProgress) {
     throw new Error('Gemini Nano is still downloading — click "Download AI" in the Side Panel first.');
   }
 
-  let prompt = buildBriefingPrompt(articles, dateRangeLabel, MAX_BRIEFING_PROMPT_CHARS);
-
-  return await runTwoPhaseGeneration({
-    inputChars: prompt.length,
-    expectedOutputChars: 1300,
-    speedStorageKey: BRIEFING_SPEED_KEY,
-    defaultOutputCharsPerSec: 75,
-    label: `Synthesizing ${articles.length} post(s)`,
-    onProgress,
-    execute: async (reportStreamChars) => {
-      let session = null;
-      try {
-        session =
-          'LanguageModel' in self
-            ? await self.LanguageModel.create({
-                expectedOutputs: [{ type: 'text', languages: ['en'] }],
-              })
-            : await self.ai.languageModel.create();
-
-        // Trim prompt automatically if the device's Gemini Nano session reports a smaller token quota
-        if (typeof session.inputQuota === 'number' && session.inputQuota > 1024) {
-          const safeMaxChars = Math.min(MAX_BRIEFING_PROMPT_CHARS, Math.floor((session.inputQuota - 700) * 3.2));
-          if (prompt.length > safeMaxChars) {
-            prompt = buildBriefingPrompt(articles, dateRangeLabel, safeMaxChars);
-          }
-        }
-
-        if (typeof session.promptStreaming === 'function') {
-          const stream = session.promptStreaming(prompt);
-          let fullText = '';
-          for await (const chunk of stream) {
-            if (typeof chunk === 'string') {
-              fullText =
-                chunk.startsWith(fullText) && chunk.length >= fullText.length
-                  ? chunk
-                  : fullText + chunk;
-              await reportStreamChars(fullText.length);
+  // Single-pass for small windows (<= 6 items)
+  if (articles.length <= BRIEFING_BATCH_SIZE + 1) {
+    let prompt = buildBriefingPrompt(articles, dateRangeLabel, MAX_BRIEFING_PROMPT_CHARS);
+    return await runTwoPhaseGeneration({
+      inputChars: prompt.length,
+      expectedOutputChars: 1300,
+      speedStorageKey: BRIEFING_SPEED_KEY,
+      defaultOutputCharsPerSec: 80,
+      label: `Synthesizing ${articles.length} post(s)`,
+      onProgress,
+      execute: async (reportStreamChars) => {
+        const { session, disposable } = await acquirePromptSession();
+        try {
+          if (typeof session.inputQuota === 'number' && session.inputQuota > 1024) {
+            const safeMaxChars = Math.min(MAX_BRIEFING_PROMPT_CHARS, Math.floor((session.inputQuota - 700) * 3.2));
+            if (prompt.length > safeMaxChars) {
+              prompt = buildBriefingPrompt(articles, dateRangeLabel, safeMaxChars);
             }
           }
-          return fullText;
+          if (typeof session.promptStreaming === 'function') {
+            const stream = session.promptStreaming(prompt);
+            let fullText = '';
+            for await (const chunk of stream) {
+              if (typeof chunk === 'string') {
+                fullText =
+                  chunk.startsWith(fullText) && chunk.length >= fullText.length
+                    ? chunk
+                    : fullText + chunk;
+                await reportStreamChars(fullText.length);
+              }
+            }
+            return fullText;
+          }
+          return await session.prompt(prompt);
+        } finally {
+          if (disposable) session?.destroy?.();
         }
-        return await session.prompt(prompt);
-      } finally {
-        session?.destroy?.();
-      }
+      },
+    });
+  }
+
+  // Incremental Map-Reduce for larger windows (> 6 items):
+  // Preserves ~280 chars per item (higher quality) while evaluating small fast chunks.
+  const batches = [];
+  for (let i = 0; i < articles.length; i += BRIEFING_BATCH_SIZE) {
+    batches.push(articles.slice(i, i + BRIEFING_BATCH_SIZE));
+  }
+
+  const totalSteps = batches.length + 1;
+  const batchBullets = [];
+
+  for (let bIdx = 0; bIdx < batches.length; bIdx++) {
+    const batch = batches[bIdx];
+    const itemsText = batch
+      .map((art, idx) => {
+        const body = (art.digest || art.content || 'Saved link').trim().slice(0, 280);
+        return `${idx + 1}. Title: ${art.title}\n   URL: ${art.url}\n   Summary: ${body}`;
+      })
+      .join('\n\n');
+
+    const mapPrompt = [
+      `Extract 1 crisp bullet point per item below, citing the source inline as [Article Title](URL).`,
+      `No intro or outro—only the bullet list:`,
+      ``,
+      itemsText,
+    ].join('\n');
+
+    const chunkOut = await runTwoPhaseGeneration({
+      inputChars: mapPrompt.length,
+      expectedOutputChars: batch.length * 140,
+      speedStorageKey: BRIEFING_SPEED_KEY,
+      defaultOutputCharsPerSec: 80,
+      label: `Batch ${bIdx + 1}/${batches.length} (${batch.length} posts)`,
+      onProgress: (prog) => {
+        const overallPct = Math.min(
+          92,
+          Math.round(((bIdx + (prog.pct || 0) / 100) / totalSteps) * 100)
+        );
+        onProgress?.({
+          pct: overallPct,
+          etaText: prog.etaText,
+          message: `Synthesizing (${overallPct}% · batch ${bIdx + 1}/${batches.length})...`,
+        });
+      },
+      execute: (reportStreamChars) => runPromptText(mapPrompt, reportStreamChars),
+    });
+
+    if (chunkOut) batchBullets.push(chunkOut);
+  }
+
+  const combinedBullets = batchBullets.join('\n');
+  const reducePrompt = [
+    `You are synthesizing a 2-minute reading briefing for ${dateRangeLabel}.`,
+    `Based ONLY on the takeaways below, write a concise **Emerging Themes** section with 2 to 3 numbered patterns connecting these reads (under 140 words):`,
+    ``,
+    combinedBullets.slice(0, 4500),
+  ].join('\n');
+
+  const themesOut = await runTwoPhaseGeneration({
+    inputChars: reducePrompt.length,
+    expectedOutputChars: 550,
+    speedStorageKey: BRIEFING_SPEED_KEY,
+    defaultOutputCharsPerSec: 80,
+    label: `Distilling themes (${totalSteps}/${totalSteps})`,
+    onProgress: (prog) => {
+      const overallPct = Math.min(
+        99,
+        Math.round(((batches.length + (prog.pct || 0) / 100) / totalSteps) * 100)
+      );
+      onProgress?.({
+        pct: overallPct,
+        etaText: prog.etaText,
+        message: `Distilling themes (${overallPct}%)...`,
+      });
     },
+    execute: (reportStreamChars) => runPromptText(reducePrompt, reportStreamChars),
   });
+
+  return [
+    `### Key Takeaways`,
+    combinedBullets,
+    ``,
+    `### Emerging Themes`,
+    themesOut,
+  ].join('\n');
 }
 
 export const generateBriefing = synthesizeBriefing;
