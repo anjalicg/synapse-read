@@ -4,7 +4,7 @@ const SUMMARY_SPEED_KEY = 'afterword:nanoSummaryCharsPerSec';
 const BRIEFING_SPEED_KEY = 'afterword:nanoBriefingCharsPerSec';
 
 export function formatEtaSeconds(seconds) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '';
+  if (!Number.isFinite(seconds) || seconds <= 0) return '~1s left';
   if (seconds < 60) return `~${Math.max(1, Math.round(seconds))}s left`;
   const mins = Math.floor(seconds / 60);
   const secs = Math.round(seconds % 60);
@@ -135,69 +135,52 @@ export async function warmupNanoModel(onStatus) {
   }
 }
 
-async function runWithStreamingOrTimer({
-  streamFn,
-  batchFn,
+// Runs a live 250ms ETA ticker from t=0 (covering session load + inference) and refines with stream tokens
+async function runTrackedGeneration({
   expectedChars,
   speedStorageKey,
   defaultCharsPerSec,
   label,
   onProgress,
+  execute,
 }) {
   const savedSpeed = Number(localStorage.getItem(speedStorageKey)) || defaultCharsPerSec;
-  const startedAt = Date.now();
-  const initialEta = formatEtaSeconds(Math.max(2, expectedChars / savedSpeed));
-  onProgress?.({ pct: 5, etaText: initialEta, message: `${label}... (${initialEta})` });
-
-  if (typeof streamFn === 'function') {
-    const stream = await streamFn();
-    let fullText = '';
-    for await (const chunk of stream) {
-      if (typeof chunk === 'string') {
-        fullText = chunk.startsWith(fullText) && chunk.length >= fullText.length
-          ? chunk
-          : fullText + chunk;
-      }
-      const elapsedSec = Math.max(0.25, (Date.now() - startedAt) / 1000);
-      const liveSpeed = Math.max(15, fullText.length / elapsedSec);
-      const blendedSpeed = savedSpeed * 0.35 + liveSpeed * 0.65;
-      const pct = Math.min(96, Math.max(8, Math.round((fullText.length / expectedChars) * 100)));
-      const remainingChars = Math.max(0, expectedChars - fullText.length);
-      const etaText = formatEtaSeconds(remainingChars / blendedSpeed);
-      onProgress?.({
-        pct,
-        etaText,
-        message: `${label}... ${pct}%${etaText ? ` (${etaText})` : ''}`,
-      });
-    }
-
-    const totalSec = Math.max(0.25, (Date.now() - startedAt) / 1000);
-    if (fullText.length > 40) {
-      localStorage.setItem(speedStorageKey, String(Math.round(fullText.length / totalSec)));
-    }
-    return fullText.trim();
-  }
-
-  // Fallback calibrated countdown when streaming isn't exposed
   const estTotalSec = Math.max(3, expectedChars / savedSpeed);
-  const timer = setInterval(() => {
+  const startedAt = Date.now();
+  let streamedChars = 0;
+
+  const emitTick = () => {
     const elapsedSec = (Date.now() - startedAt) / 1000;
-    const pct = Math.min(92, Math.max(8, Math.round((elapsedSec / estTotalSec) * 100)));
-    const etaText = formatEtaSeconds(Math.max(1, estTotalSec - elapsedSec));
-    onProgress?.({
-      pct,
-      etaText,
-      message: `${label}... ${pct}% (${etaText})`,
-    });
-  }, 450);
+    if (streamedChars > 20) {
+      const liveSpeed = Math.max(15, streamedChars / Math.max(0.25, elapsedSec));
+      const blendedSpeed = savedSpeed * 0.3 + liveSpeed * 0.7;
+      const pct = Math.min(96, Math.max(15, Math.round((streamedChars / expectedChars) * 100)));
+      const etaText = formatEtaSeconds(Math.max(1, (expectedChars - streamedChars) / blendedSpeed));
+      onProgress?.({ pct, etaText, message: `${label}... ${pct}% (${etaText})` });
+    } else {
+      const pct = Math.min(88, Math.max(5, Math.round((elapsedSec / estTotalSec) * 100)));
+      const etaText = formatEtaSeconds(Math.max(1, estTotalSec - elapsedSec));
+      onProgress?.({ pct, etaText, message: `${label}... ${pct}% (${etaText})` });
+    }
+  };
+
+  emitTick();
+  const timer = setInterval(emitTick, 250);
+
+  const reportStreamChars = async (charCount) => {
+    streamedChars = charCount;
+    emitTick();
+    // Yield a macrotask tick so React paints intermediate progress percentages
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
 
   try {
-    const result = (await batchFn()) || '';
+    const output = (await execute(reportStreamChars)) || '';
     const totalSec = Math.max(0.25, (Date.now() - startedAt) / 1000);
-    if (result.length > 40) {
-      localStorage.setItem(speedStorageKey, String(Math.round(result.length / totalSec)));
+    if (output.length > 40) {
+      localStorage.setItem(speedStorageKey, String(Math.round(output.length / totalSec)));
     }
-    return result.trim();
+    return output.trim();
   } finally {
     clearInterval(timer);
   }
@@ -212,71 +195,100 @@ export async function summarizeArticle(content, onProgress) {
   const status = await checkNanoStatus();
 
   if (status.summarizer === 'available') {
-    let summarizer = null;
-    try {
-      if ('Summarizer' in self) {
-        summarizer = await self.Summarizer.create({
-          type: 'tldr',
-          format: 'plain-text',
-          length: 'medium',
-          expectedInputLanguages: ['en'],
-          outputLanguage: 'en',
-        });
-      } else if (self.ai?.summarizer?.create) {
-        summarizer = await self.ai.summarizer.create({
-          type: 'tl;dr',
-          format: 'plain-text',
-          length: 'medium',
-        });
-      }
+    return await runTrackedGeneration({
+      expectedChars: 420,
+      speedStorageKey: SUMMARY_SPEED_KEY,
+      defaultCharsPerSec: 80,
+      label: 'Generating digest',
+      onProgress,
+      execute: async (reportStreamChars) => {
+        let summarizer = null;
+        try {
+          if ('Summarizer' in self) {
+            summarizer = await self.Summarizer.create({
+              type: 'tldr',
+              format: 'plain-text',
+              length: 'medium',
+              expectedInputLanguages: ['en'],
+              outputLanguage: 'en',
+            });
+          } else if (self.ai?.summarizer?.create) {
+            summarizer = await self.ai.summarizer.create({
+              type: 'tl;dr',
+              format: 'plain-text',
+              length: 'medium',
+            });
+          }
 
-      if (summarizer) {
-        return await runWithStreamingOrTimer({
-          streamFn: typeof summarizer.summarizeStreaming === 'function'
-            ? () => summarizer.summarizeStreaming(cleanText)
-            : null,
-          batchFn: () => summarizer.summarize(cleanText),
-          expectedChars: 420,
-          speedStorageKey: SUMMARY_SPEED_KEY,
-          defaultCharsPerSec: 95,
-          label: 'Generating TL;DR digest',
-          onProgress,
-        });
-      }
-    } finally {
-      summarizer?.destroy?.();
-    }
+          if (!summarizer) return '';
+          if (typeof summarizer.summarizeStreaming === 'function') {
+            const stream = await summarizer.summarizeStreaming(cleanText);
+            let fullText = '';
+            for await (const chunk of stream) {
+              if (typeof chunk === 'string') {
+                fullText =
+                  chunk.startsWith(fullText) && chunk.length >= fullText.length
+                    ? chunk
+                    : fullText + chunk;
+                await reportStreamChars(fullText.length);
+              }
+            }
+            return fullText;
+          }
+          return await summarizer.summarize(cleanText);
+        } finally {
+          summarizer?.destroy?.();
+        }
+      },
+    });
   }
 
   if (status.prompt === 'available') {
-    let session = null;
-    try {
-      session =
-        'LanguageModel' in self
-          ? await self.LanguageModel.create({
-              expectedOutputs: [{ type: 'text', languages: ['en'] }],
-            })
-          : await self.ai.languageModel.create();
+    return await runTrackedGeneration({
+      expectedChars: 420,
+      speedStorageKey: SUMMARY_SPEED_KEY,
+      defaultCharsPerSec: 75,
+      label: 'Generating digest',
+      onProgress,
+      execute: async (reportStreamChars) => {
+        let session = null;
+        try {
+          session =
+            'LanguageModel' in self
+              ? await self.LanguageModel.create({
+                  expectedOutputs: [{ type: 'text', languages: ['en'] }],
+                })
+              : await self.ai.languageModel.create();
 
-      const prompt = `Summarize the following article in 2 to 3 crisp, informative sentences without filler:\n\n${cleanText}`;
-      return await runWithStreamingOrTimer({
-        streamFn: typeof session.promptStreaming === 'function'
-          ? () => session.promptStreaming(prompt)
-          : null,
-        batchFn: () => session.prompt(prompt),
-        expectedChars: 420,
-        speedStorageKey: SUMMARY_SPEED_KEY,
-        defaultCharsPerSec: 85,
-        label: 'Generating TL;DR digest',
-        onProgress,
-      });
-    } finally {
-      session?.destroy?.();
-    }
+          const prompt = `Summarize the following article in 2 to 3 crisp, informative sentences without filler:\n\n${cleanText}`;
+          if (typeof session.promptStreaming === 'function') {
+            const stream = await session.promptStreaming(prompt);
+            let fullText = '';
+            for await (const chunk of stream) {
+              if (typeof chunk === 'string') {
+                fullText =
+                  chunk.startsWith(fullText) && chunk.length >= fullText.length
+                    ? chunk
+                    : fullText + chunk;
+                await reportStreamChars(fullText.length);
+              }
+            }
+            return fullText;
+          }
+          return await session.prompt(prompt);
+        } finally {
+          session?.destroy?.();
+        }
+      },
+    });
   }
 
-  if (status.summarizer === 'downloadable' || status.summarizer === 'downloading' ||
-      status.prompt === 'downloadable' || status.prompt === 'downloading') {
+  if (
+    status.summarizer === 'downloadable' ||
+    status.summarizer === 'downloading' ||
+    status.prompt === 'downloadable' ||
+    status.prompt === 'downloading'
+  ) {
     throw new Error('Gemini Nano is still downloading — click "Download AI" in the Side Panel first.');
   }
 
@@ -320,30 +332,43 @@ export async function synthesizeBriefing(articles, dateRangeLabel, onProgress) {
   }
 
   const prompt = buildBriefingPrompt(articles, dateRangeLabel);
-  let session = null;
 
-  try {
-    session =
-      'LanguageModel' in self
-        ? await self.LanguageModel.create({
-            expectedOutputs: [{ type: 'text', languages: ['en'] }],
-          })
-        : await self.ai.languageModel.create();
+  return await runTrackedGeneration({
+    expectedChars: 1350,
+    speedStorageKey: BRIEFING_SPEED_KEY,
+    defaultCharsPerSec: 75,
+    label: `Synthesizing ${articles.length} post(s)`,
+    onProgress,
+    execute: async (reportStreamChars) => {
+      let session = null;
+      try {
+        session =
+          'LanguageModel' in self
+            ? await self.LanguageModel.create({
+                expectedOutputs: [{ type: 'text', languages: ['en'] }],
+              })
+            : await self.ai.languageModel.create();
 
-    return await runWithStreamingOrTimer({
-      streamFn: typeof session.promptStreaming === 'function'
-        ? () => session.promptStreaming(prompt)
-        : null,
-      batchFn: () => session.prompt(prompt),
-      expectedChars: 1350,
-      speedStorageKey: BRIEFING_SPEED_KEY,
-      defaultCharsPerSec: 85,
-      label: `Synthesizing ${articles.length} post(s)`,
-      onProgress,
-    });
-  } finally {
-    session?.destroy?.();
-  }
+        if (typeof session.promptStreaming === 'function') {
+          const stream = await session.promptStreaming(prompt);
+          let fullText = '';
+          for await (const chunk of stream) {
+            if (typeof chunk === 'string') {
+              fullText =
+                chunk.startsWith(fullText) && chunk.length >= fullText.length
+                  ? chunk
+                  : fullText + chunk;
+              await reportStreamChars(fullText.length);
+            }
+          }
+          return fullText;
+        }
+        return await session.prompt(prompt);
+      } finally {
+        session?.destroy?.();
+      }
+    },
+  });
 }
 
 export const generateBriefing = synthesizeBriefing;

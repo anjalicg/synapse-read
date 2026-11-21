@@ -179,7 +179,7 @@ export function useBriefings({
         return;
       }
 
-      setStatusMsg(`Synthesizing ${windowArticles.length} post(s) with Gemini Nano...`);
+      setStatusMsg(`Synthesizing ${windowArticles.length} post(s)... 5% (~12s left)`);
       let summaryMarkdown = await synthesizeBriefing(enriched, `${startDate} to ${endDate}`, ({ message }) => {
         setStatusMsg(message);
       });

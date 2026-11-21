@@ -47,7 +47,7 @@ export function useArticles({ setStatusMsg, setBackgroundStatus, onArchiveMutate
 
   async function runBackgroundDigest(id, title, content, userNotes = '', batchPrefix = '') {
     try {
-      setBackgroundStatus(`${batchPrefix}Generating TL;DR digest...`);
+      setBackgroundStatus(`${batchPrefix}Generating digest... 5% (~5s left)`);
       const digest = await summarizeArticle(content, ({ message }) => {
         setBackgroundStatus(`${batchPrefix}${message}`);
       });
