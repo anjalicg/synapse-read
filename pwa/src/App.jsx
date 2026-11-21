@@ -15,8 +15,14 @@ import {
 const CLIENT_ID_KEY = 'afterword:pwa:googleClientId';
 const DEFAULT_CLIENT_ID = '355508535747-le46i085l572ehjkklebif8dfqv7eb8f.apps.googleusercontent.com';
 
+function detectMobileViewport() {
+  if (typeof window === 'undefined') return true;
+  const uaMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  return uaMobile || window.innerWidth < 768;
+}
+
 export default function App() {
-  const [clientId, setClientId] = useState(
+  const [clientId] = useState(
     () => import.meta.env.VITE_GOOGLE_CLIENT_ID || localStorage.getItem(CLIENT_ID_KEY) || DEFAULT_CLIENT_ID
   );
   const [token, setToken] = useState('');
@@ -26,13 +32,28 @@ export default function App() {
   const [briefings, setBriefings] = useState([]);
   const [query, setQuery] = useState('');
   const [readerItem, setReaderItem] = useState(null);
+
+  // Inline title & note editing
+  const [editingTitleId, setEditingTitleId] = useState(null);
+  const [titleDraft, setTitleDraft] = useState('');
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [speaking, setSpeaking] = useState(false);
 
+  // Device-aware README / Guide state
+  const [isMobile, setIsMobile] = useState(detectMobileViewport);
+  const [showGuide, setShowGuide] = useState(true);
+
+  // Book scan draft state
   const [scanDraft, setScanDraft] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const cameraInputRef = useRef(null);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(detectMobileViewport());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   async function refreshLocal() {
     const arts = await db.articles.orderBy('savedAt').reverse().toArray();
@@ -101,9 +122,16 @@ export default function App() {
     if (!scanDraft?.content?.trim()) return;
 
     const now = Date.now();
+    const stamp = new Date(now).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
     await db.articles.add({
       url: `afterword://book-scan/${now}`,
-      title: scanDraft.title.trim() || `Book Excerpt — ${new Date().toLocaleDateString()}`,
+      title: scanDraft.title.trim() || `Book Scan — ${stamp}`,
       content: scanDraft.content.trim(),
       digest: '',
       userNotes: scanDraft.userNotes.trim(),
@@ -119,15 +147,33 @@ export default function App() {
     if (token) await handleSync(token);
   }
 
-  async function handleSaveNote(item) {
+  async function handleSaveTitle(item) {
+    const cleaned = titleDraft.trim();
+    if (!cleaned) return;
+    const now = Date.now();
     await db.articles.update(item.id, {
-      userNotes: noteDraft.trim(),
-      updatedAt: Date.now(),
+      title: cleaned,
+      updatedAt: now,
+    });
+    setEditingTitleId(null);
+    await refreshLocal();
+    if (readerItem?.id === item.id) {
+      setReaderItem({ ...readerItem, title: cleaned, updatedAt: now });
+    }
+    if (token) await handleSync(token);
+  }
+
+  async function handleSaveNote(item) {
+    const cleaned = noteDraft.trim();
+    const now = Date.now();
+    await db.articles.update(item.id, {
+      userNotes: cleaned,
+      updatedAt: now,
     });
     setEditingNoteId(null);
     await refreshLocal();
     if (readerItem?.id === item.id) {
-      setReaderItem({ ...item, userNotes: noteDraft.trim() });
+      setReaderItem({ ...readerItem, userNotes: cleaned, updatedAt: now });
     }
     if (token) await handleSync(token);
   }
@@ -166,9 +212,20 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <strong style={{ fontSize: '18px' }}>Afterword</strong>
-          <div style={{ display: 'flex', gap: '6px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <strong style={{ fontSize: '18px' }}>Afterword</strong>
+            <div style={{ fontSize: '11.5px', color: 'var(--ink-muted)' }}>
+              Local-first digital commonplace book
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <button
+              className={`btn ${showGuide ? 'active' : ''}`}
+              onClick={() => setShowGuide((prev) => !prev)}
+            >
+              {showGuide ? 'Hide Guide' : 'Guide'}
+            </button>
             <input
               ref={cameraInputRef}
               type="file"
@@ -190,18 +247,69 @@ export default function App() {
           </div>
         </div>
 
+        <div style={{ display: 'flex', gap: '12px', fontSize: '12px', flexWrap: 'wrap' }}>
+          <a href="/story.html" style={{ color: 'var(--ink)', fontWeight: 600 }}>The Story</a>
+          <a href="/privacy.html" style={{ color: 'var(--ink)', fontWeight: 600 }}>Privacy Policy</a>
+          {!isMobile && (
+            <a href="/afterword.zip" download style={{ color: 'var(--sage)', fontWeight: 700 }}>
+              Download Chrome Extension (.zip) ↓
+            </a>
+          )}
+        </div>
+
         {status && <div style={{ fontSize: '12px', fontFamily: 'monospace', color: 'var(--sage)' }}>{status}</div>}
       </header>
+
+      {showGuide && (
+        <section className="card" style={{ background: '#FDF7E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {isMobile ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ fontSize: '15px' }}>Mobile Companion Workflows</strong>
+                <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>MOBILE</span>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <li><strong>Read &amp; Listen:</strong> Tap <em>Sync Drive</em> to pull weekly briefings and saved digests for offline reading or audio playback.</li>
+                <li><strong>Scan Book Pages:</strong> Tap <em>+ Scan Page</em> to photograph a physical book page, extract text via Drive OCR, and name the book.</li>
+                <li><strong>Jot Margin Notes:</strong> Add or edit reflections on any saved item and sync back to desktop.</li>
+              </ul>
+              <div style={{ fontSize: '12.5px', padding: '8px 10px', background: 'var(--card)', border: '1px solid var(--ink)', borderRadius: '8px' }}>
+                <strong>Want the full experience?</strong> Open <code>afterword-notes.vercel.app</code> on <strong>desktop Chrome</strong> to download the extension for one-click web clipping, on-device Gemini Nano summaries, semantic search, and weekly synthesis briefings.
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <strong style={{ fontSize: '15px' }}>Desktop Chrome Extension — Full Setup</strong>
+                <a href="/afterword.zip" download className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                  Download afterword.zip ↓
+                </a>
+              </div>
+              <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <li><strong>Download &amp; Unzip:</strong> Download <code>afterword.zip</code> above and unzip the <code>afterword</code> folder on your computer.</li>
+                <li><strong>Load in Chrome:</strong> Open <code>chrome://extensions</code>, toggle <strong>Developer mode</strong> on (top right), click <strong>Load unpacked</strong>, and select the unzipped folder.</li>
+                <li><strong>Enable On-Device AI (Optional):</strong> Enable Chrome&apos;s built-in Prompt API / Gemini Nano flags for private local digests and weekly briefings.</li>
+                <li><strong>Sync Everywhere:</strong> Click <strong>Sync Drive</strong> in the extension Side Panel and here to keep your desktop and phone in sync via your own Google Drive.</li>
+              </ol>
+            </>
+          )}
+        </section>
+      )}
 
       {scanDraft && (
         <form className="card" onSubmit={handleSaveScan} style={{ background: '#FDF7E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <strong>Review Scanned Book Excerpt</strong>
-          <input
-            className="input"
-            placeholder="Book title & page # (e.g., Blindsight, p. 114)"
-            value={scanDraft.title}
-            onChange={(e) => setScanDraft({ ...scanDraft, title: e.target.value })}
-          />
+          <label style={{ fontSize: '12px', fontWeight: 600 }}>
+            Book Title &amp; Page # (editable anytime later)
+            <input
+              autoFocus
+              className="input"
+              style={{ marginTop: '4px' }}
+              placeholder="e.g., Blindsight — Ch. 4, p. 114"
+              value={scanDraft.title}
+              onChange={(e) => setScanDraft({ ...scanDraft, title: e.target.value })}
+            />
+          </label>
           <textarea
             className="input"
             rows={6}
@@ -216,7 +324,7 @@ export default function App() {
           />
           <div style={{ display: 'flex', gap: '8px' }}>
             <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-              Save & Sync
+              Save &amp; Sync
             </button>
             <button type="button" className="btn" onClick={() => setScanDraft(null)}>
               Cancel
@@ -227,17 +335,48 @@ export default function App() {
 
       {readerItem ? (
         <article className="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
             <button className="pill" onClick={() => setReaderItem(null)}>
               ← Back
             </button>
-            {readerItem.url.startsWith('http') && (
-              <a href={readerItem.url} target="_blank" rel="noreferrer" className="pill">
-                Open Original ↗
-              </a>
-            )}
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                className="pill"
+                onClick={() => {
+                  setEditingTitleId(readerItem.id);
+                  setTitleDraft(readerItem.title || '');
+                }}
+              >
+                Rename Title
+              </button>
+              {readerItem.url.startsWith('http') && (
+                <a href={readerItem.url} target="_blank" rel="noreferrer" className="pill">
+                  Open Original ↗
+                </a>
+              )}
+            </div>
           </div>
-          <h2 style={{ margin: 0, fontSize: '18px' }}>{readerItem.title}</h2>
+
+          {editingTitleId === readerItem.id ? (
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <input
+                autoFocus
+                className="input"
+                style={{ flex: 1 }}
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+              />
+              <button className="btn btn-primary" onClick={() => handleSaveTitle(readerItem)}>
+                Save Title
+              </button>
+              <button className="btn" onClick={() => setEditingTitleId(null)}>
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <h2 style={{ margin: 0, fontSize: '18px' }}>{readerItem.title}</h2>
+          )}
+
           {readerItem.userNotes && (
             <div className="note-box">
               <strong>Note:</strong> {readerItem.userNotes}
@@ -300,12 +439,34 @@ export default function App() {
                   <div style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--ink-muted)' }}>
                     {item.source === 'book-scan' ? 'BOOK SCAN' : 'ARTICLE'}
                   </div>
-                  <div
-                    onClick={() => setReaderItem(item)}
-                    style={{ fontWeight: 700, fontSize: '15px', cursor: 'pointer', margin: '4px 0' }}
-                  >
-                    {item.title}
-                  </div>
+
+                  {editingTitleId === item.id ? (
+                    <div style={{ margin: '6px 0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <input
+                        autoFocus
+                        className="input"
+                        placeholder="Book title & page #"
+                        value={titleDraft}
+                        onChange={(e) => setTitleDraft(e.target.value)}
+                      />
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button className="btn btn-primary" onClick={() => handleSaveTitle(item)}>
+                          Save Title
+                        </button>
+                        <button className="btn" onClick={() => setEditingTitleId(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => setReaderItem(item)}
+                      style={{ fontWeight: 700, fontSize: '15px', cursor: 'pointer', margin: '4px 0' }}
+                    >
+                      {item.title}
+                    </div>
+                  )}
+
                   {item.digest && <div style={{ fontSize: '13.5px', color: 'var(--ink-muted)' }}>{item.digest}</div>}
                   {item.userNotes && (
                     <div className="note-box">
@@ -330,9 +491,18 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
                       <button className="pill" onClick={() => setReaderItem(item)}>
                         Read
+                      </button>
+                      <button
+                        className="pill"
+                        onClick={() => {
+                          setEditingTitleId(item.id);
+                          setTitleDraft(item.title || '');
+                        }}
+                      >
+                        Rename
                       </button>
                       <button
                         className="pill"

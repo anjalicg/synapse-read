@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Afterword — The 2-Minute Story</title>
+    <style>
+        :root {
+            --paper: #F6F4EF;
+            --paper-dot: #D5D0C5;
+            --card: #FFFDF9;
+            --ink: #1E1D1A;
+            --ink-muted: #5C5952;
+            --line: #C7C1B5;
+
+            /* Quirky minimalistic risograph accents */
+            --terracotta: #E05A47;
+            --ochre: #D99B26;
+            --sage: #3D7A5D;
+            --periwinkle: #4C6EF5;
+            --plum: #9C528B;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background-color: var(--paper);
+            background-image: radial-gradient(var(--paper-dot) 1.15px, transparent 1.15px);
+            background-size: 22px 22px;
+            color: var(--ink);
+            font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Navigation */
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 24px;
+            border-bottom: 1.5px solid var(--ink);
+            background: var(--card);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--ink);
+            font-weight: 800;
+            font-size: 16px;
+            letter-spacing: -0.015em;
+        }
+
+        .btn-ghost {
+            background: var(--paper);
+            color: var(--ink);
+            border: 1.5px solid var(--ink);
+            box-shadow: 2px 2px 0 var(--ink);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+        }
+
+        .btn-ghost:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0 var(--ink);
+        }
+
+        /* Main Stage */
+        .stage-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 28px 18px;
+        }
+
+        .stage {
+            width: 100%;
+            max-width: 820px;
+            background: var(--card);
+            border: 1.75px solid var(--ink);
+            border-radius: 18px;
+            box-shadow: 5px 5px 0 var(--ink);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 28px 34px 24px;
+            gap: 24px;
+            position: relative;
+        }
+
+        /* Connected Graph Node Stepper (Top of Card) */
+        .node-stepper {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 420px;
+            width: 100%;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .node-stepper::before {
+            content: "";
+            position: absolute;
+            left: 12px;
+            right: 12px;
+            top: 50%;
+            height: 1.5px;
+            background: var(--line);
+            z-index: 1;
+        }
+
+        .step-node {
+            position: relative;
+            z-index: 2;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--paper);
+            border: 1.5px solid var(--ink);
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--ink-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
+        }
+
+        .step-node.active {
+            background: var(--node-color, var(--terracotta));
+            color: #FFFDF9;
+            transform: scale(1.2);
+            box-shadow: 2px 2px 0 var(--ink);
+        }
+
+        .step-node.visited:not(.active) {
+            background: var(--ink);
+            color: var(--card);
+        }
+
+        /* Scenes Container */
+        .scenes {
+            position: relative;
+            min-height: 330px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .scene {
+            --accent: var(--terracotta);
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.45s ease, transform 0.45s ease;
+            pointer-events: none;
+        }
+
+        .scene.active {
+            position: relative;
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .scene-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--accent);
+            background: var(--paper);
+            border: 1.25px solid var(--ink);
+            border-radius: 999px;
+            padding: 3px 12px;
+            margin-bottom: 14px;
+        }
+
+        .kicker-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: inline-block;
+        }
+
+        .scene-headline {
+            font-size: clamp(26px, 4vw, 37px);
+            font-weight: 800;
+            line-height: 1.18;
+            letter-spacing: -0.025em;
+            margin: 0 0 18px;
+            max-width: 680px;
+            color: var(--ink);
+        }
+
+        /* Compact Mini-Graph Visual Strip */
+        .visual-strip {
+            width: 100%;
+            max-width: 560px;
+            background: var(--paper);
+            border: 1.5px dashed var(--line);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .mini-node {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--card);
+            border: 1.25px solid var(--ink);
+            border-radius: 8px;
+            padding: 5px 10px;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .mini-node.muted {
+            color: var(--ink-muted);
+            border-style: dashed;
+            background: transparent;
+        }
+
+        .mini-node.highlight {
+            border-color: var(--accent);
+            box-shadow: 2px 2px 0 var(--accent);
+        }
+
+        .edge-arrow {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        /* Larger, High-Readability Narration Copy */
+        .narration {
+            max-width: 660px;
+            font-size: clamp(17px, 2.1vw, 19.5px);
+            line-height: 1.65;
+            color: var(--ink);
+            margin: 0;
+        }
+
+        .narration em {
+            font-style: italic;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .narration strong {
+            font-weight: 750;
+            text-decoration: underline;
+            text-decoration-color: var(--accent);
+            text-decoration-thickness: 2px;
+            text-underline-offset: 3px;
+        }
+
+        /* Scene 5 CTA Buttons */
+        .cta-row {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--terracotta);
+            color: #FFFDF9;
+            border: 1.5px solid var(--ink);
+            box-shadow: 3px 3px 0 var(--ink);
+            font-weight: 700;
+            font-size: 15px;
+            padding: 10px 18px;
+            border-radius: 9px;
+            text-decoration: none;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 4px 4px 0 var(--ink);
+        }
+
+        /* Bottom Timeline & Controls */
+        .controls {
+            border-top: 1.5px solid var(--line);
+            padding-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .timeline {
+            display: grid;
+            grid-template-columns: 25fr 20fr 25fr 30fr 20fr;
+            gap: 6px;
+        }
+
+        .seg {
+            height: 7px;
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .seg-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--ink);
+        }
+
+        .control-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12.5px;
+            color: var(--ink-muted);
+        }
+
+        .ctrl-btns {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .ctrl-btn {
+            background: var(--paper);
+            color: var(--ink);
+            border: 1.25px solid var(--ink);
+            border-radius: 7px;
+            padding: 5px 12px;
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .ctrl-btn:hover {
+            background: var(--ink);
+            color: var(--card);
+        }
+
+        .ctrl-btn.music-prompt {
+            background: var(--ochre);
+            color: #FFFDF9;
+        }
+
+        .eq-bars {
+            display: inline-flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 11px;
+            margin-right: 4px;
+        }
+
+        .eq-bars span {
+            width: 2.5px;
+            background: currentColor;
+            border-radius: 2px;
+            animation: eq 0.9s infinite ease-in-out;
+        }
+
+        .eq-bars span:nth-child(2) { animation-delay: 0.2s; }
+        .eq-bars span:nth-child(3) { animation-delay: 0.4s; }
+        .eq-bars.paused span { animation: none; height: 3px !important; opacity: 0.5; }
+
+        @keyframes eq {
+            0%, 100% { height: 3px; }
+            50% { height: 11px; }
+        }
+    </style>
+</head>
+<body>
+<nav class="topbar">
+    <a class="brand" href="./">
+        <svg viewBox="0 0 128 128" width="26" height="26" aria-hidden="true">
+            <rect x="4" y="4" width="120" height="120" rx="26" fill="#1E1D1A" />
+            <g stroke="#E05A47" stroke-width="5" stroke-linecap="round">
+                <line x1="34" y1="36" x2="64" y2="64" />
+                <line x1="94" y1="38" x2="64" y2="64" />
+                <line x1="30" y1="88" x2="64" y2="64" />
+                <line x1="96" y1="86" x2="64" y2="64" />
+            </g>
+            <circle cx="34" cy="36" r="6" fill="#E05A47" />
+            <circle cx="94" cy="38" r="6" fill="#D99B26" />
+            <circle cx="30" cy="88" r="6" fill="#3D7A5D" />
+            <circle cx="96" cy="86" r="6" fill="#4C6EF5" />
+            <circle cx="64" cy="64" r="9" fill="#FFFDF9" />
+        </svg>
+        <span>Afterword</span>
+    </a>
+    <a class="btn-ghost" href="./">&larr; Graph &amp; Installer</a>
+</nav>
+
+<main class="stage-wrapper">
+    <div class="stage">
+        <!-- Connected 5-Node Stepper -->
+        <div class="node-stepper" aria-label="Story Chapters">
+            <button class="step-node active" data-step="0" style="--node-color: var(--terracotta);">1</button>
+            <button class="step-node" data-step="1" style="--node-color: var(--ochre);">2</button>
+            <button class="step-node" data-step="2" style="--node-color: var(--sage);">3</button>
+            <button class="step-node" data-step="3" style="--node-color: var(--periwinkle);">4</button>
+            <button class="step-node" data-step="4" style="--node-color: var(--plum);">5</button>
+        </div>
+
+        <div class="scenes">
+            <!-- Scene 1: 0:00 - 0:25 -->
+            <section class="scene active" data-scene="0" style="--accent: var(--terracotta);">
+                <div class="scene-kicker"><i class="kicker-dot"></i> node:01 &middot; the tab graveyard</div>
+                <h2 class="scene-headline">Every saved link is a promise you made to your future self.</h2>
+                <div class="visual-strip">
+                    <span class="mini-node muted">42 Open Tabs</span>
+                    <span class="edge-arrow">&rarr;</span>
+                    <span class="mini-node muted">148 Reading List Links</span>
+                    <span class="edge-arrow">&rarr;</span>
+                    <span class="mini-node highlight">0 Connections Made</span>
+                </div>
+                <p class="narration">
+                    Look at your browser right now. Forty open tabs. Hundreds of bookmarked articles. Each started as a spark—<em>“I’ll read this tonight.”</em> Instead, they turn into a graveyard of good intentions because life moved on before you had time to connect the dots.
+                </p>
+            </section>
+
+            <!-- Scene 2: 0:25 - 0:45 -->
+            <section class="scene" data-scene="1" style="--accent: var(--ochre);">
+                <div class="scene-kicker"><i class="kicker-dot"></i> node:02 &middot; privacy first</div>
+                <h2 class="scene-headline">Your curiosity shouldn’t live on someone else’s server.</h2>
+                <div class="visual-strip">
+                    <span class="mini-node highlight">Your Laptop (IndexedDB + Nano)</span>
+                    <span class="edge-arrow">&#128274; 100% Local</span>
+                    <span class="mini-node muted" style="text-decoration: line-through;">Cloud AI Servers</span>
+                </div>
+                <p class="narration">
+                    Asking cloud AI for help usually means handing over everything you read, highlight, and think about to remote servers. Your reading history is a map of your mind—it should belong only to you. Meet <strong>Afterword</strong>.
+                </p>
+            </section>
+
+            <!-- Scene 3: 0:45 - 1:10 -->
+            <section class="scene" data-scene="2" style="--accent: var(--sage);">
+                <div class="scene-kicker"><i class="kicker-dot"></i> node:03 &middot; effortless capture</div>
+                <h2 class="scene-headline">One click. Distraction-free. Zero bytes leave your device.</h2>
+                <div class="visual-strip">
+                    <span class="mini-node muted">Noisy Web Page</span>
+                    <span class="edge-arrow">&rarr;</span>
+                    <span class="mini-node highlight">Clean Digest + 384-Dim Vector</span>
+                </div>
+                <p class="narration">
+                    Afterword lives quietly in your Chrome Side Panel. With one click, it strips away web clutter, saves clean prose locally, and distills a sharp digest using Chrome’s built-in on-device AI. No accounts. No API keys.
+                </p>
+            </section>
+
+            <!-- Scene 4: 1:10 - 1:40 -->
+            <section class="scene" data-scene="3" style="--accent: var(--periwinkle);">
+                <div class="scene-kicker"><i class="kicker-dot"></i> node:04 &middot; recall across time</div>
+                <h2 class="scene-headline">It remembers what you forgot you read.</h2>
+                <div class="visual-strip">
+                    <span class="mini-node highlight">Today&rsquo;s Briefing</span>
+                    <span class="edge-arrow">&harr; 84% match &harr;</span>
+                    <span class="mini-node highlight">Article Saved 3 Months Ago</span>
+                </div>
+                <p class="narration">
+                    When you generate a 2-minute briefing—or click <strong>Listen</strong> over morning coffee—Afterword doesn’t just summarize this week. It taps you on the shoulder and surfaces articles from months ago that connect directly to what you’re reading today.
+                </p>
+            </section>
+
+            <!-- Scene 5: 1:40 - 2:00 -->
+            <section class="scene" data-scene="4" style="--accent: var(--plum);">
+                <div class="scene-kicker"><i class="kicker-dot"></i> node:05 &middot; yours forever</div>
+                <h2 class="scene-headline">Your private, local-first second brain.</h2>
+                <div class="visual-strip">
+                    <span class="mini-node">Export .md</span>
+                    <span class="edge-arrow">+</span>
+                    <span class="mini-node">JSON Backup</span>
+                    <span class="edge-arrow">+</span>
+                    <span class="mini-node highlight">Zero Subscriptions</span>
+                </div>
+                <p class="narration">
+                    Your notes stay portable in clean Markdown. Your archive stays yours forever. Zero servers. Zero subscriptions. Just your curiosity, finally connected.
+                </p>
+                <div class="cta-row">
+                    <a class="btn-primary" href="./afterword.zip" download="afterword.zip">
+                        &#11015; Download afterword.zip
+                    </a>
+                    <a class="btn-ghost" href="./" style="padding: 10px 16px; font-size: 14px;">
+                        Open Graph Guide
+                    </a>
+                </div>
+            </section>
+        </div>
+
+        <div class="controls">
+            <div class="timeline">
+                <div class="seg" data-idx="0"><div class="seg-fill"></div></div>
+                <div class="seg" data-idx="1"><div class="seg-fill"></div></div>
+                <div class="seg" data-idx="2"><div class="seg-fill"></div></div>
+                <div class="seg" data-idx="3"><div class="seg-fill"></div></div>
+                <div class="seg" data-idx="4"><div class="seg-fill"></div></div>
+            </div>
+
+            <div class="control-bar">
+                <div class="ctrl-btns">
+                    <button id="btn-prev" class="ctrl-btn">&larr; Prev</button>
+                    <button id="btn-playpause" class="ctrl-btn">Pause</button>
+                    <button id="btn-next" class="ctrl-btn">Next &rarr;</button>
+                    <button id="btn-mute" class="ctrl-btn music-prompt">
+                        <span id="eq-bars" class="eq-bars paused"><span></span><span></span><span></span></span>
+                        <span id="mute-label">Enable Music</span>
+                    </button>
+                </div>
+                <div>
+                    <span id="scene-counter">node 1 / 5</span> &middot;
+                    <span id="time-display">0:00 / 2:00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    const DURATIONS = [25, 20, 25, 30, 20];
+    const TOTAL_SECONDS = DURATIONS.reduce((a, b) => a + b, 0);
+    const STARTS = DURATIONS.reduce((acc, d, i) => {
+        acc.push(i === 0 ? 0 : acc[i - 1] + DURATIONS[i - 1]);
+        return acc;
+    }, []);
+
+    let elapsed = 0;
+    let isPlaying = true;
+    let lastTimestamp = null;
+    let activeScene = 0;
+
+    const scenes = Array.from(document.querySelectorAll('.scene'));
+    const stepNodes = Array.from(document.querySelectorAll('.step-node'));
+    const segFills = Array.from(document.querySelectorAll('.seg-fill'));
+    const btnPlayPause = document.getElementById('btn-playpause');
+    const timeDisplay = document.getElementById('time-display');
+    const sceneCounter = document.getElementById('scene-counter');
+    const btnMute = document.getElementById('btn-mute');
+    const eqBars = document.getElementById('eq-bars');
+    const muteLabel = document.getElementById('mute-label');
+
+    // --- Procedural Ambient Music (Web Audio API) ---
+    let audioCtx = null;
+    let masterGain = null;
+    let isMuted = false;
+    let chordStep = 0;
+
+    const CHORDS = [
+        [174.61, 220.0, 261.63, 329.63], // Fmaj7
+        [130.81, 196.0, 246.94, 329.63], // Cmaj7
+        [110.0, 164.81, 196.0, 261.63],  // Am7
+        [98.0, 146.83, 196.0, 246.94],   // G6
+    ];
+    const BELL_NOTES = [523.25, 659.25, 587.33, 493.88, 783.99];
+
+    function updateMusicUI() {
+        const active = audioCtx && audioCtx.state === 'running' && !isMuted;
+        eqBars.classList.toggle('paused', !active);
+        btnMute.classList.toggle('music-prompt', !active && !isMuted);
+        muteLabel.textContent = isMuted ? 'Muted' : active ? 'Music On' : 'Enable Music';
+    }
+
+    function initAudio() {
+        if (!audioCtx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            audioCtx = new AudioContext();
+
+            masterGain = audioCtx.createGain();
+            masterGain.gain.setValueAtTime(0.16, audioCtx.currentTime);
+
+            const delay = audioCtx.createDelay();
+            delay.delayTime.value = 0.42;
+            const feedback = audioCtx.createGain();
+            feedback.gain.value = 0.3;
+            const delayFilter = audioCtx.createBiquadFilter();
+            delayFilter.type = 'lowpass';
+            delayFilter.frequency.value = 1100;
+
+            delay.connect(feedback);
+            feedback.connect(delayFilter);
+            delayFilter.connect(delay);
+            delay.connect(masterGain);
+            masterGain.connect(audioCtx.destination);
+
+            function playPadChord() {
+                if (!audioCtx || audioCtx.state !== 'running' || isMuted) return;
+                const now = audioCtx.currentTime;
+                const freqs = CHORDS[chordStep % CHORDS.length];
+                chordStep++;
+
+                freqs.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const filter = audioCtx.createBiquadFilter();
+                    const noteGain = audioCtx.createGain();
+
+                    osc.type = idx === 0 ? 'sine' : 'triangle';
+                    osc.frequency.setValueAtTime(freq, now);
+
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(650, now);
+
+                    noteGain.gain.setValueAtTime(0.0001, now);
+                    noteGain.gain.linearRampToValueAtTime(idx === 0 ? 0.22 : 0.11, now + 1.4);
+                    noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 4.6);
+
+                    osc.connect(filter);
+                    filter.connect(noteGain);
+                    noteGain.connect(masterGain);
+                    noteGain.connect(delay);
+
+                    osc.start(now);
+                    osc.stop(now + 4.8);
+                });
+            }
+
+            playPadChord();
+            setInterval(playPadChord, 4200);
+        }
+
+        if (audioCtx.state === 'suspended' && !isMuted) {
+            audioCtx.resume().then(updateMusicUI).catch(() => {});
+        }
+        updateMusicUI();
+    }
+
+    function playSceneChime(sceneIdx) {
+        if (!audioCtx || audioCtx.state !== 'running' || isMuted) return;
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(BELL_NOTES[sceneIdx % BELL_NOTES.length], now);
+
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.09, now + 0.06);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.start(now);
+        osc.stop(now + 1.9);
+    }
+
+    function formatTime(sec) {
+        const s = Math.floor(sec);
+        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+
+    function render() {
+        let idx = 0;
+        for (let i = 0; i < STARTS.length; i++) {
+            if (elapsed >= STARTS[i]) idx = i;
+        }
+
+        if (idx !== activeScene) {
+            activeScene = idx;
+            playSceneChime(idx);
+        }
+
+        scenes.forEach((el, i) => el.classList.toggle('active', i === activeScene));
+        stepNodes.forEach((node, i) => {
+            node.classList.toggle('active', i === activeScene);
+            node.classList.toggle('visited', i < activeScene);
+        });
+
+        segFills.forEach((fill, i) => {
+            const pct = Math.max(0, Math.min(100, ((elapsed - STARTS[i]) / DURATIONS[i]) * 100));
+            fill.style.width = `${pct}%`;
+        });
+
+        sceneCounter.textContent = `node ${activeScene + 1} / 5`;
+        timeDisplay.textContent = `${formatTime(elapsed)} / 2:00`;
+        btnPlayPause.textContent = isPlaying ? 'Pause' : elapsed >= TOTAL_SECONDS ? 'Replay' : 'Play';
+    }
+
+    function tick(timestamp) {
+        if (!isPlaying) {
+            lastTimestamp = null;
+            return;
+        }
+        if (lastTimestamp != null) {
+            elapsed = Math.min(TOTAL_SECONDS, elapsed + (timestamp - lastTimestamp) / 1000);
+            render();
+            if (elapsed >= TOTAL_SECONDS) {
+                isPlaying = false;
+                render();
+                return;
+            }
+        }
+        lastTimestamp = timestamp;
+        requestAnimationFrame(tick);
+    }
+
+    function togglePlayPause() {
+        initAudio();
+        if (isPlaying) {
+            isPlaying = false;
+            audioCtx?.suspend().then(updateMusicUI);
+            render();
+        } else {
+            if (elapsed >= TOTAL_SECONDS) elapsed = 0;
+            isPlaying = true;
+            lastTimestamp = null;
+            if (audioCtx && !isMuted) audioCtx.resume().then(updateMusicUI);
+            render();
+            requestAnimationFrame(tick);
+        }
+    }
+
+    function jumpToScene(idx) {
+        initAudio();
+        const clamped = Math.max(0, Math.min(4, idx));
+        elapsed = STARTS[clamped];
+        activeScene = clamped;
+        playSceneChime(clamped);
+        render();
+    }
+
+    btnMute.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!audioCtx || audioCtx.state === 'suspended') {
+            isMuted = false;
+            initAudio();
+            return;
+        }
+        isMuted = !isMuted;
+        if (isMuted) audioCtx.suspend().then(updateMusicUI);
+        else audioCtx.resume().then(updateMusicUI);
+    });
+
+    btnPlayPause.addEventListener('click', togglePlayPause);
+    document.getElementById('btn-prev').addEventListener('click', () => jumpToScene(activeScene - 1));
+    document.getElementById('btn-next').addEventListener('click', () => jumpToScene(activeScene + 1));
+
+    document.querySelectorAll('.seg').forEach((seg) => {
+        seg.addEventListener('click', () => jumpToScene(Number(seg.getAttribute('data-idx'))));
+    });
+
+    stepNodes.forEach((node) => {
+        node.addEventListener('click', () => jumpToScene(Number(node.getAttribute('data-step'))));
+    });
+
+    document.addEventListener('pointerdown', () => {
+        if (!isMuted) initAudio();
+    }, { once: true });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            togglePlayPause();
+        } else if (e.code === 'ArrowLeft') {
+            jumpToScene(activeScene - 1);
+        } else if (e.code === 'ArrowRight') {
+            jumpToScene(activeScene + 1);
+        } else if (e.key.toLowerCase() === 'm') {
+            btnMute.click();
+        }
+    });
+
+    initAudio();
+    render();
+    requestAnimationFrame(tick);
+</script>
+</body>
+</html>
