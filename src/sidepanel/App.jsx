@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './theme.css';
 import {
+  db,
   ensurePersistentStorage,
   exportArchiveJSON,
   importArchiveJSON,
@@ -28,37 +29,6 @@ import { ArticleCard } from './components/ArticleCard.jsx';
 import { ScanModal } from './components/ScanModal.jsx';
 
 export default function App() {
-  React.useEffect(() => {
-    async function drainPendingContextSaves() {
-      if (!chrome?.storage?.local) return;
-      const res = await chrome.storage.local.get('afterword:pendingSaves');
-      const queue = res['afterword:pendingSaves'] || [];
-      if (!queue.length) return;
-      await chrome.storage.local.remove('afterword:pendingSaves');
-      for (const item of queue) {
-        const now = item.queuedAt || Date.now();
-        await db.articles.put({
-          url: item.url,
-          title: item.title || item.url,
-          content: item.content || '',
-          digest: '',
-          userNotes: '',
-          savedAt: now,
-          updatedAt: now,
-          status: item.content ? 'saved' : 'queued',
-        });
-      }
-      if (typeof articlesHook?.reload === 'function') await articlesHook.reload();
-      else if (typeof articlesHook?.refresh === 'function') await articlesHook.refresh();
-    }
-    drainPendingContextSaves();
-    const onMsg = (msg) => {
-      if (msg?.type === 'AFTERWORD_PENDING_SAVES') drainPendingContextSaves();
-    };
-    chrome.runtime?.onMessage?.addListener(onMsg);
-    return () => chrome.runtime?.onMessage?.removeListener(onMsg);
-  }, []);
-
   const [statusMsg, setStatusMsg] = useState('');
   const [nanoStatus, setNanoStatus] = useState({ summarizer: 'checking', prompt: 'checking' });
   const [showAbout, setShowAbout] = useState(false);
@@ -111,6 +81,75 @@ export default function App() {
       setIsBriefingMinimized(false);
     },
   });
+
+  useEffect(() => {
+let draining = false;
+async function drainPendingContextSaves() {
+  if (draining || !chrome?.storage?.local) return;
+  draining = true;
+  try {
+    const res = await chrome.storage.local.get('afterword:pendingSaves');
+    const queue = res['afterword:pendingSaves'] || [];
+    if (!queue.length) return;
+    await chrome.storage.local.remove('afterword:pendingSaves');
+
+    let addedCount = 0;
+    for (const item of queue) {
+      if (!item?.url) continue;
+      const now = item.queuedAt || Date.now();
+      const existing = await db.articles.where('url').equals(item.url).first();
+      if (!existing) {
+        await db.articles.add({
+          url: item.url,
+          title: item.title || item.url,
+          content: item.content || '',
+          digest: '',
+          userNotes: '',
+          savedAt: now,
+          updatedAt: now,
+          status: item.content ? 'digesting' : 'saved',
+        });
+        addedCount++;
+      } else if (item.content && !existing.content) {
+        await db.articles.update(existing.id, {
+          title: item.title || existing.title,
+          content: item.content,
+          updatedAt: now,
+          status: 'digesting',
+        });
+        addedCount++;
+      }
+    }
+
+    await articlesHook.loadArticles();
+    if (addedCount > 0) {
+      setStatusMsg(`Saved ${addedCount} item(s) from right-click menu.`);
+      articlesHook.enrichPendingArticles?.();
+    }
+  } catch (err) {
+    console.error('[Afterword] Failed draining right-click saves:', err);
+    setStatusMsg(`Right-click save error: ${err.message}`);
+  } finally {
+    draining = false;
+  }
+}
+
+drainPendingContextSaves();
+const onMsg = (msg) => {
+  if (msg?.type === 'AFTERWORD_PENDING_SAVES') drainPendingContextSaves();
+};
+const onStorage = (changes, area) => {
+  if (area === 'local' && changes['afterword:pendingSaves']?.newValue?.length) {
+    drainPendingContextSaves();
+  }
+};
+chrome.runtime?.onMessage?.addListener(onMsg);
+chrome.storage?.onChanged?.addListener(onStorage);
+return () => {
+  chrome.runtime?.onMessage?.removeListener(onMsg);
+  chrome.storage?.onChanged?.removeListener(onStorage);
+};
+}, []);
 
   const search = useSemanticSearch({
     articles: articlesHook.articles,
@@ -404,11 +443,13 @@ export default function App() {
 
       {showAbout ? (
         <AboutPanel
-          articleCount={articlesHook.articles.length}
-          briefingCount={briefingsHook.briefings.length}
-          nanoStatus={nanoStatus}
-          onClose={() => setShowAbout(false)}
-        />
+      articleCount={articlesHook.articles.length}
+      briefingCount={briefingsHook.briefings.length}
+      nanoStatus={nanoStatus}
+      onClose={() => setShowAbout(false)}
+      onBackup={handleExportJSON}
+      onRestore={handleImportJSON}
+    />
       ) : (
         <>
           <div style={{ display: 'flex', gap: '8px' }}>

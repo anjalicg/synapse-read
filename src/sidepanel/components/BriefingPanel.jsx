@@ -122,37 +122,7 @@ export function BriefingPanel({ nanoReady, statusMsg, briefingsHook, speech, isM
           </span>
                 </div>
 
-                <div style={{ display: 'flex', gap: '6px' }}>
-                    {[
-                        ['7D', 7],
-                        ['14D', 14],
-                        ['30D', 30],
-                    ].map(([label, days]) => {
-                        const isSelected = preset === label;
-                          
-
-return (
-                            <button
-                                key={label}
-                                onClick={() => applyPreset(label, days)}
-                                style={{
-                                    flex: 1,
-                                    padding: '4px',
-                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                    fontSize: '11.5px',
-                                    cursor: 'pointer',
-                                    fontWeight: 700,
-                                    background: isSelected ? 'var(--ink)' : 'var(--paper)',
-                                    color: isSelected ? 'var(--card)' : 'var(--ink)',
-                                    border: '1.25px solid var(--ink)',
-                                    borderRadius: '6px',
-                                }}
-                            >
-                                {label}
-                            </button>
-                        );
-                    })}
-                </div>
+                
 
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '11px' }}>
                     <input
@@ -284,24 +254,36 @@ return (
                     >
                         <div style={{ display: 'flex', gap: '5px', alignItems: 'center', flexWrap: 'wrap' }}>
                             <button
-                                onClick={() => speech.playPause(briefing)}
-                                className="sr-pill"
-                                style={{
-                                    background: speech.speechState === 'playing' ? 'var(--sage)' : 'var(--paper)',
-                                    color: speech.speechState === 'playing' ? '#FFFDF9' : 'var(--ink)',
-                                }}
-                            >
-                                {speech.speechState === 'playing'
-                                    ? 'Pause'
-                                    : speech.speechState === 'paused'
-                                        ? 'Resume'
-                                        : 'Listen'}
-                            </button>
-                            {speech.speechState !== 'idle' && (
-                                <button onClick={speech.stop} className="sr-pill">
-                                    Stop
-                                </button>
+                            onClick={() => speech.playPause(briefing)}
+                            className="sr-pill"
+                            aria-label={speech.speechState === 'playing' ? 'Pause' : speech.speechState === 'paused' ? 'Resume' : 'Listen'}
+                            title={speech.speechState === 'playing' ? 'Pause' : speech.speechState === 'paused' ? 'Resume' : 'Listen'}
+                            style={{
+                                background: speech.speechState === 'playing' ? 'var(--sage)' : 'var(--paper)',
+                                color: speech.speechState === 'playing' ? '#FFFDF9' : 'var(--ink)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '4px 8px',
+                            }}
+                        >
+                            {speech.speechState === 'playing' ? (
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+                            ) : (
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6,4 20,12 6,20" /></svg>
                             )}
+                        </button>
+                        {speech.speechState !== 'idle' && (
+                            <button
+                                onClick={speech.stop}
+                                className="sr-pill"
+                                aria-label="Stop"
+                                title="Stop"
+                                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '4px 8px' }}
+                            >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" /></svg>
+                            </button>
+                        )}
                             {speech.voices.length > 0 && (
                                 <select
                                     value={speech.selectedVoiceURI}
