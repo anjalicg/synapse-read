@@ -3,7 +3,7 @@ import { pipeline, env } from '@huggingface/transformers';
 // Load ONNX WASM & .mjs workers from local extension bundle (MV3 CSP compliant)
 env.allowLocalModels = false;
 env.useBrowserCache = true;
-env.backends.onnx.wasm.wasmPaths = chrome.runtime.getURL('/');
+env.backends.onnx.wasm.wasmPaths = globalThis.chrome?.runtime?.getURL?.('/') || '/';
 env.backends.onnx.wasm.numThreads = 1;
 env.backends.onnx.wasm.proxy = false;
 
@@ -112,6 +112,7 @@ export function findArchiveConnections(windowArticles, allArticles, { topK = 3, 
  */
 export async function semanticSearch(query, allArticles, { topK = 8, minScore = 0.22 } = {}) {
     const cleanQuery = query.trim();
+    if (!Array.isArray(allArticles)) return [];
     if (!cleanQuery) return allArticles;
 
     const queryLower = cleanQuery.toLowerCase();

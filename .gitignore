@@ -10,3 +10,5 @@ node_modules
 test-results.log
 test-results/
 playwright-report/
+*.zip
+/afterword/

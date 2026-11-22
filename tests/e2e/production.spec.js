@@ -55,7 +55,7 @@ test('Desktop Vercel PWA (1280x800): renders Overview with zero console/page err
   await page.getByRole('button', { name: 'Architecture & Design' }).click();
   await expect(page.getByRole('heading', { name: /Designing Afterword/i })).toBeVisible();
   expect(pageErrors).toEqual([]);
-  await context.close();
+  await Promise.race([context.close(), new Promise((r) => setTimeout(r, 3000))]);
 });
 
 test('Mobile Vercel PWA (390x844): renders Mobile Companion Workflows and reader tabs cleanly', async ({ browser }) => {
@@ -103,7 +103,7 @@ test('Chrome Extension Side Panel (dist/): loads unpacked extension without runt
     await expect(page.getByRole('button', { name: 'Backup JSON' })).toBeVisible();
     expect(pageErrors).toEqual([]);
   } finally {
-    await context.close();
+    await Promise.race([context.close(), new Promise((r) => setTimeout(r, 3000))]);
     fs.rmSync(userDataDir, { recursive: true, force: true });
   }
 });

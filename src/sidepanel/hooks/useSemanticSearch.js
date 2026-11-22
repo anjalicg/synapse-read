@@ -40,10 +40,10 @@ export function useSemanticSearch({
 
         setIsSearching(true);
         try {
-            const allArticles = await ensureAllEmbeddings(await db.articles.toArray());
-            const allBriefings = db.briefings
-                ? await ensureBriefingEmbeddings(await db.briefings.toArray())
-                : [];
+            const allArticles = await db.articles.toArray();
+            await ensureAllEmbeddings?.(allArticles);
+            const allBriefings = db.briefings ? await db.briefings.toArray() : [];
+            await ensureBriefingEmbeddings?.(allBriefings);
 
             const [articleResults, briefingResults] = await Promise.all([
                 semanticSearch(q, allArticles),
